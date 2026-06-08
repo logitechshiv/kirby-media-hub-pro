@@ -1,0 +1,19 @@
+title: Media Hub Folder
+
+num: default
+
+options:
+  changeTemplate: false
+  changeStatus: false
+
+sections:
+  files:
+    type: files
+    template: media-hub-asset
+    uploads:
+      template: media-hub-asset
+    layout: cards
+    sortable: true
+    image:
+      cover: true
+      ratio: 3/2

@@ -1,0 +1,8 @@
+title: Media Hub
+
+options:
+  delete: false
+  changeSlug: false
+  changeStatus: false
+  changeTemplate: false
+  changeTitle: false
