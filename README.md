@@ -2,7 +2,7 @@
 
 A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — WordPress-style asset management built directly into the Panel.
 
-![Kirby Media Hub](https://kirbycode.com/media-hub-preview.png)
+![Kirby Media Hub](screenshots/preview.png)
 
 ---
 
