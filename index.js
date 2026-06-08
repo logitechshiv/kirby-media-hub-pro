@@ -210,6 +210,7 @@ window.panel.plugin('kirbycode/media-hub', {
           if (uploaded > 0) {
             this.$panel.notification.success(uploaded + ' file' + (uploaded > 1 ? 's' : '') + ' uploaded');
             this.loadFiles();
+            this.loadFolders();
             this.statsRefreshKey++;
           }
         },
@@ -240,10 +241,20 @@ window.panel.plugin('kirbycode/media-hub', {
           }
         },
 
+        async loadFolders() {
+          try {
+            const res = await this.$panel.api.get('media-hub/folders');
+            this.localFolders = res.data || [];
+          } catch (e) {
+            // non-critical
+          }
+        },
+
         onFileDeleted(fileId) {
           this.files      = this.files.filter(f => f.id !== fileId);
           this.activeFile = null;
           this.statsRefreshKey++;
+          this.loadFolders();
         },
       },
 
