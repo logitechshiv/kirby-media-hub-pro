@@ -4,7 +4,7 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 
 ![Kirby Media Hub — Panel overview](screenshots/preview.png)
 
-![Kirby Media Hub — File metadata](screenshots/single image meta.png)
+![Kirby Media Hub — File metadata](screenshots/single-image-meta.png)
 
 ---
 
