@@ -121,54 +121,6 @@ Hero_image:
 
 ---
 
-## PHP Template Usage
-
-### Single file (`multiple: false`)
-
-```php
-<?php
-$ref  = $page->hero_image()->value();   // "- file://abc123\n" or plain "file://abc123"
-$refs = $page->hero_image()->yaml();    // always an array
-$file = !empty($refs) ? $kirby->file($refs[0]) : null;
-?>
-<?php if ($file): ?>
-  <img src="<?= $file->url() ?>"
-       alt="<?= $file->content()->alt()->or($file->filename()) ?>">
-<?php endif ?>
-```
-
-### Multiple files / gallery (`multiple: true`)
-
-```php
-<?php foreach ($page->gallery()->yaml() as $ref): ?>
-  <?php $file = $kirby->file($ref) ?>
-  <?php if (!$file) continue ?>
-  <figure>
-    <img src="<?= $file->url() ?>"
-         alt="<?= $file->content()->alt()->or($file->filename()) ?>">
-    <?php if ($caption = $file->content()->description()->value()): ?>
-      <figcaption><?= $caption ?></figcaption>
-    <?php endif ?>
-  </figure>
-<?php endforeach ?>
-```
-
-### Video file
-
-```php
-<?php
-$ref  = $page->cover_video()->yaml()[0] ?? null;
-$file = $ref ? $kirby->file($ref) : null;
-?>
-<?php if ($file && $file->type() === 'video'): ?>
-  <video controls>
-    <source src="<?= $file->url() ?>" type="<?= $file->mime() ?>">
-  </video>
-<?php endif ?>
-```
-
----
-
 ## Supported File Types
 
 | Category | Extensions |
