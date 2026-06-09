@@ -18,6 +18,7 @@ function mediaHubSerializeFile(File $file, bool $detailed = false): array
         }
     }
 
+    $tagsRaw = (string) $file->content()->get('tags')->value();
     $data = [
         'id'           => $file->id(),
         'uuid'         => $file->uuid()->id(),
@@ -35,6 +36,9 @@ function mediaHubSerializeFile(File $file, bool $detailed = false): array
         'description'  => (string) $file->content()->get('description')->value(),
         'copyright'    => (string) $file->content()->get('copyright')->value(),
         'photographer' => (string) $file->content()->get('photographer')->value(),
+        'tags'         => $tagsRaw ? array_values(array_filter(array_map('trim', explode(',', $tagsRaw)))) : [],
+        'uploadedby'   => (string) $file->content()->get('uploadedby')->value(),
+        'uploaddate'   => (string) $file->content()->get('uploaddate')->value(),
     ];
 
     if ($detailed) {
@@ -67,6 +71,13 @@ return [
             $page    = max(1, (int) $request->get('page', 1));
             $limit   = 40;
 
+            $tag        = trim((string) $request->get('tag', ''));
+            $dateFrom   = trim((string) $request->get('dateFrom', ''));
+            $dateTo     = trim((string) $request->get('dateTo', ''));
+            $uploadedBy = trim((string) $request->get('uploadedBy', ''));
+            $minSize    = (int) $request->get('minSize', 0);
+            $maxSize    = (int) $request->get('maxSize', 0);
+
             $root = $kirby->page($slug);
             if (!$root) {
                 return ['data' => [], 'pagination' => ['total' => 0, 'page' => 1, 'limit' => $limit]];
@@ -98,6 +109,44 @@ return [
             // Type filter
             if ($type) {
                 $allFiles = array_values(array_filter($allFiles, fn ($f) => $f->type() === $type));
+            }
+
+            // Tag filter
+            if ($tag !== '') {
+                $tagLower = mb_strtolower($tag);
+                $allFiles = array_values(array_filter($allFiles, function ($f) use ($tagLower) {
+                    $raw = (string) $f->content()->get('tags')->value();
+                    if ($raw === '') return false;
+                    $fileTags = array_map('mb_strtolower', array_map('trim', explode(',', $raw)));
+                    return in_array($tagLower, $fileTags, true);
+                }));
+            }
+
+            // Date range filter (uses uploaddate field, falls back to file modified date)
+            if ($dateFrom !== '' || $dateTo !== '') {
+                $allFiles = array_values(array_filter($allFiles, function ($f) use ($dateFrom, $dateTo) {
+                    $d = (string) $f->content()->get('uploaddate')->value() ?: $f->modified('Y-m-d');
+                    if ($dateFrom !== '' && $d < $dateFrom) return false;
+                    if ($dateTo   !== '' && $d > $dateTo)   return false;
+                    return true;
+                }));
+            }
+
+            // Uploaded-by filter
+            if ($uploadedBy !== '') {
+                $allFiles = array_values(array_filter($allFiles, function ($f) use ($uploadedBy) {
+                    return (string) $f->content()->get('uploadedby')->value() === $uploadedBy;
+                }));
+            }
+
+            // File size filter (minSize / maxSize in KB)
+            if ($minSize > 0 || $maxSize > 0) {
+                $allFiles = array_values(array_filter($allFiles, function ($f) use ($minSize, $maxSize) {
+                    $kb = $f->size() / 1024;
+                    if ($minSize > 0 && $kb < $minSize) return false;
+                    if ($maxSize > 0 && $kb > $maxSize) return false;
+                    return true;
+                }));
             }
 
             // Search filter (filename, title, alt, description, copyright, photographer)
@@ -169,7 +218,7 @@ return [
             }
 
             $body    = $kirby->request()->body()->toArray();
-            $allowed = ['title', 'alt', 'description', 'copyright', 'photographer'];
+            $allowed = ['title', 'alt', 'description', 'copyright', 'photographer', 'tags'];
             $content = [];
 
             foreach ($allowed as $field) {
@@ -178,7 +227,11 @@ return [
                 }
             }
 
-            $file->update($content);
+            try {
+                $kirby->impersonate('kirby', fn() => $file->update($content));
+            } catch (\Throwable $e) {
+                return \Kirby\Http\Response::json(['status' => 'error', 'message' => $e->getMessage()], 400);
+            }
 
             return ['status' => 'ok'];
         },
@@ -220,11 +273,24 @@ return [
 
             $data = [];
             foreach ($root->children()->listed() as $p) {
+                $children = [];
+                foreach ($p->children()->listed() as $c) {
+                    $children[] = [
+                        'id'        => $c->id(),
+                        'slug'      => $c->slug(),
+                        'path'      => $p->slug() . '/' . $c->slug(),
+                        'title'     => $c->title()->value(),
+                        'fileCount' => $c->files()->count(),
+                        'children'  => [],
+                    ];
+                }
                 $data[] = [
                     'id'        => $p->id(),
                     'slug'      => $p->slug(),
+                    'path'      => $p->slug(),
                     'title'     => $p->title()->value(),
                     'fileCount' => $p->files()->count(),
+                    'children'  => $children,
                 ];
             }
 
@@ -238,10 +304,11 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
-            $kirby = App::instance();
-            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
-            $root  = $kirby->page($slug);
-            $title = trim((string) $kirby->request()->get('title', ''));
+            $kirby      = App::instance();
+            $slug       = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $root       = $kirby->page($slug);
+            $title      = trim((string) $kirby->request()->get('title', ''));
+            $parentPath = trim((string) $kirby->request()->get('parent', ''));
 
             if (!$root) {
                 return ['status' => 'error', 'message' => 'Media Hub page not found'];
@@ -251,24 +318,30 @@ return [
                 return ['status' => 'error', 'message' => 'Folder name is required'];
             }
 
+            $parent = $parentPath !== ''
+                ? $kirby->page($slug . '/' . $parentPath)
+                : $root;
+
+            if (!$parent) {
+                return ['status' => 'error', 'message' => 'Parent folder not found'];
+            }
+
             $folderSlug = Str::slug($title);
 
-            if ($root->findPageOrDraft($folderSlug)) {
+            if ($parent->findPageOrDraft($folderSlug)) {
                 return ['status' => 'error', 'message' => 'A folder with that name already exists'];
             }
 
             try {
-                // impersonate('kirby') bypasses blueprint permission checks
-                // (create: false in the media-hub blueprint prevents regular users
-                // from adding subpages, but our plugin must be able to do so)
-                $folder = $kirby->impersonate('kirby', function () use ($kirby, $root, $folderSlug, $title, $slug) {
-                    $f = $root->createChild([
+                $folder = $kirby->impersonate('kirby', function () use ($kirby, $parent, $folderSlug, $title, $slug, $parentPath) {
+                    $f = $parent->createChild([
                         'template' => 'media-hub-folder',
                         'slug'     => $folderSlug,
                         'content'  => ['title' => $title],
                     ]);
                     $f->changeStatus('listed');
-                    return $kirby->page($slug . '/' . $folderSlug);
+                    $fullPath = $parentPath !== '' ? $parentPath . '/' . $folderSlug : $folderSlug;
+                    return $kirby->page($slug . '/' . $fullPath);
                 });
             } catch (\Throwable $e) {
                 return ['status' => 'error', 'message' => $e->getMessage()];
@@ -278,13 +351,17 @@ return [
                 return ['status' => 'error', 'message' => 'Folder could not be created'];
             }
 
+            $relPath = $parentPath !== '' ? $parentPath . '/' . $folderSlug : $folderSlug;
+
             return [
                 'status' => 'ok',
                 'data'   => [
                     'id'        => $folder->id(),
                     'slug'      => $folder->slug(),
+                    'path'      => $relPath,
                     'title'     => $folder->title()->value(),
                     'fileCount' => 0,
+                    'children'  => [],
                 ],
             ];
         },
@@ -295,10 +372,11 @@ return [
         'pattern' => 'media-hub/folders/(:any)',
         'method'  => 'DELETE',
         'auth'    => true,
-        'action'  => function (string $folderSlug) {
+        'action'  => function (string $encodedPath) {
             $kirby  = App::instance();
             $slug   = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
-            $folder = $kirby->page($slug . '/' . $folderSlug);
+            $path   = str_replace('+', '/', rawurldecode($encodedPath));
+            $folder = $kirby->page($slug . '/' . $path);
 
             if (!$folder) {
                 return ['status' => 'error', 'message' => 'Folder not found'];
@@ -379,7 +457,7 @@ return [
             }
 
             $total   = count($allFiles);
-            $folders = $root->children()->listed()->count();
+            $folders = $root->index()->filterBy('intendedTemplate', 'media-hub-folder')->count();
             $byType  = [];
             $sizes   = [];
 
@@ -454,6 +532,7 @@ return [
             $query  = trim((string) $kirby->request()->get('q', ''));
             $type   = (string) $kirby->request()->get('type', '');
             $folder = trim((string) $kirby->request()->get('folder', ''));
+            $tag    = trim((string) $kirby->request()->get('tag', ''));
             $page   = max(1, (int) $kirby->request()->get('page', 1));
             $limit  = 30;
 
@@ -461,12 +540,20 @@ return [
                 return ['data' => [], 'folders' => [], 'pagination' => ['total' => 0, 'page' => 1, 'limit' => $limit]];
             }
 
-            // Build folders list for the picker UI
-            $folderList = [];
+            // Build folder tree for the picker sidebar
+            $folderTree = [];
             foreach ($root->children()->listed() as $p) {
-                $folderList[] = [
-                    'slug'  => $p->slug(),
-                    'title' => $p->title()->value(),
+                $children = [];
+                foreach ($p->children()->listed() as $c) {
+                    $children[] = [
+                        'path'  => $p->slug() . '/' . $c->slug(),
+                        'title' => $c->title()->value(),
+                    ];
+                }
+                $folderTree[] = [
+                    'path'     => $p->slug(),
+                    'title'    => $p->title()->value(),
+                    'children' => $children,
                 ];
             }
 
@@ -493,6 +580,31 @@ return [
             // Type filter
             if ($type) {
                 $allFiles = array_values(array_filter($allFiles, fn ($f) => $f->type() === $type));
+            }
+
+            // Build tag list from type-filtered files so sidebar only shows tags
+            // that actually have matching files in the current context
+            $tagCounts = [];
+            foreach ($allFiles as $f) {
+                $raw = (string) $f->content()->get('tags')->value();
+                if ($raw === '') continue;
+                foreach (array_map('trim', explode(',', $raw)) as $t) {
+                    if ($t !== '') $tagCounts[$t] = ($tagCounts[$t] ?? 0) + 1;
+                }
+            }
+            arsort($tagCounts);
+            $tagList = [];
+            foreach ($tagCounts as $t => $count) {
+                $tagList[] = ['tag' => $t, 'count' => $count];
+            }
+
+            // Tag filter
+            if ($tag !== '') {
+                $allFiles = array_values(array_filter($allFiles, function ($f) use ($tag) {
+                    $raw  = (string) $f->content()->get('tags')->value();
+                    $tags = array_filter(array_map('trim', explode(',', $raw)));
+                    return in_array($tag, $tags, true);
+                }));
             }
 
             // Full-text search: filename, title, alt, description, copyright, photographer
@@ -535,12 +647,394 @@ return [
             }
 
             return [
-                'data'       => $data,
-                'folders'    => $folderList,
-                'pagination' => [
+                'data'        => $data,
+                'folderTree'  => $folderTree,
+                'tags'        => $tagList,
+                'pagination'  => [
                     'total' => $total,
                     'page'  => $page,
                     'limit' => $limit,
+                ],
+            ];
+        },
+    ],
+
+    // ── 11. Unique uploaders (for Smart Filter dropdown) ───────────────────
+    [
+        'pattern' => 'media-hub/uploaders',
+        'method'  => 'GET',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $root  = $kirby->page($slug);
+
+            if (!$root) return ['data' => []];
+
+            $allFiles = [];
+            foreach ($root->files() as $f) $allFiles[] = $f;
+            foreach ($root->index() as $child) {
+                foreach ($child->files() as $f) $allFiles[] = $f;
+            }
+
+            $uploaders = [];
+            foreach ($allFiles as $f) {
+                $u = (string) $f->content()->get('uploadedby')->value();
+                if ($u && !in_array($u, $uploaders, true)) {
+                    $uploaders[] = $u;
+                }
+            }
+            sort($uploaders);
+
+            return ['data' => $uploaders];
+        },
+    ],
+
+    // ── 12. All unique tags across the media hub ────────────────────────────
+    [
+        'pattern' => 'media-hub/tags',
+        'method'  => 'GET',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $root  = $kirby->page($slug);
+
+            if (!$root) {
+                return ['data' => []];
+            }
+
+            $allFiles = [];
+            foreach ($root->files() as $f) {
+                $allFiles[] = $f;
+            }
+            foreach ($root->index() as $child) {
+                foreach ($child->files() as $f) {
+                    $allFiles[] = $f;
+                }
+            }
+
+            $tagCounts = [];
+            foreach ($allFiles as $f) {
+                $raw = (string) $f->content()->get('tags')->value();
+                if ($raw === '') continue;
+                foreach (array_map('trim', explode(',', $raw)) as $tag) {
+                    if ($tag === '') continue;
+                    $tagCounts[$tag] = ($tagCounts[$tag] ?? 0) + 1;
+                }
+            }
+
+            arsort($tagCounts);
+
+            $data = [];
+            foreach ($tagCounts as $tag => $count) {
+                $data[] = ['tag' => $tag, 'count' => $count];
+            }
+
+            return ['data' => $data];
+        },
+    ],
+
+    // ── 13. Delete a tag from all files ────────────────────────────────────
+    [
+        'pattern' => 'media-hub/tags/(:any)',
+        'method'  => 'DELETE',
+        'auth'    => true,
+        'action'  => function (string $encodedTag) {
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $root  = $kirby->page($slug);
+            $tag   = trim(rawurldecode($encodedTag));
+
+            if (!$root || $tag === '') {
+                return ['status' => 'error', 'message' => 'Invalid tag'];
+            }
+
+            $allFiles = [];
+            foreach ($root->files() as $f) {
+                $allFiles[] = $f;
+            }
+            foreach ($root->index() as $child) {
+                foreach ($child->files() as $f) {
+                    $allFiles[] = $f;
+                }
+            }
+
+            $updated = 0;
+            $kirby->impersonate('kirby', function () use ($allFiles, $tag, &$updated) {
+                foreach ($allFiles as $file) {
+                    $raw      = (string) $file->content()->get('tags')->value();
+                    $existing = array_filter(array_map('trim', explode(',', $raw)));
+                    if (!in_array($tag, $existing, true)) continue;
+                    $newTags  = array_values(array_filter($existing, fn($t) => $t !== $tag));
+                    $file->update(['tags' => implode(', ', $newTags)]);
+                    $updated++;
+                }
+            });
+
+            return ['status' => 'ok', 'data' => ['updated' => $updated, 'tag' => $tag]];
+        },
+    ],
+
+    // ── 14. Bulk delete ─────────────────────────────────────────────────────
+    [
+        'pattern' => 'media-hub/bulk/delete',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby   = App::instance();
+            $ids     = (array) $kirby->request()->get('ids', []);
+            $deleted = 0;
+            $errors  = [];
+
+            foreach ($ids as $encodedId) {
+                $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
+                $file = $kirby->file($id);
+                if (!$file) { $errors[] = basename($id) . ' not found'; continue; }
+                try {
+                    $file->delete();
+                    $deleted++;
+                } catch (\Throwable $e) {
+                    $errors[] = basename($id) . ': ' . $e->getMessage();
+                }
+            }
+
+            return ['status' => 'ok', 'deleted' => $deleted, 'errors' => $errors];
+        },
+    ],
+
+    // ── 14. Bulk move ────────────────────────────────────────────────────────
+    [
+        'pattern' => 'media-hub/bulk/move',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby        = App::instance();
+            $slug         = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $ids          = (array) $kirby->request()->get('ids', []);
+            $targetFolder = trim((string) $kirby->request()->get('targetFolder', ''));
+
+            $target = $targetFolder !== ''
+                ? $kirby->page($slug . '/' . $targetFolder)
+                : $kirby->page($slug);
+
+            if (!$target) {
+                return ['status' => 'error', 'message' => 'Target folder not found'];
+            }
+
+            $moved  = 0;
+            $errors = [];
+
+            foreach ($ids as $encodedId) {
+                $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
+                $file = $kirby->file($id);
+                if (!$file) { $errors[] = basename($id) . ' not found'; continue; }
+                if ($file->parent()->id() === $target->id()) { $moved++; continue; }
+
+                try {
+                    $kirby->impersonate('kirby', function () use ($file, $target) {
+                        $content = $file->content()->toArray();
+                        $oldUuid = $file->uuid()->id();
+
+                        $newFile = $target->createFile([
+                            'source'   => $file->root(),
+                            'filename' => $file->filename(),
+                            'template' => 'media-hub-asset',
+                            'content'  => $content,
+                        ]);
+                        // Re-stamp the old UUID so existing references remain valid
+                        $newFile->update(['uuid' => $oldUuid]);
+                        $file->delete();
+                    });
+                    $moved++;
+                } catch (\Throwable $e) {
+                    $errors[] = $file->filename() . ': ' . $e->getMessage();
+                }
+            }
+
+            return ['status' => 'ok', 'moved' => $moved, 'errors' => $errors];
+        },
+    ],
+
+    // ── 15. Bulk rename ──────────────────────────────────────────────────────
+    [
+        'pattern' => 'media-hub/bulk/rename',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby   = App::instance();
+            $ids     = (array) $kirby->request()->get('ids', []);
+            $pattern = trim((string) $kirby->request()->get('pattern', ''));
+            $startAt = max(1, (int) $kirby->request()->get('startAt', 1));
+
+            if ($pattern === '') {
+                return ['status' => 'error', 'message' => 'Pattern is required'];
+            }
+
+            $renamed = 0;
+            $errors  = [];
+            $i       = $startAt;
+
+            foreach ($ids as $encodedId) {
+                $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
+                $file = $kirby->file($id);
+                if (!$file) { $errors[] = basename($id) . ' not found'; $i++; continue; }
+
+                $newSlug = Str::slug(str_replace('{n}', $i, $pattern));
+                if ($newSlug === '') { $errors[] = $file->filename() . ': empty slug'; $i++; continue; }
+
+                try {
+                    $kirby->impersonate('kirby', function () use ($file, $newSlug) {
+                        $file->changeName($newSlug);
+                    });
+                    $renamed++;
+                } catch (\Throwable $e) {
+                    $errors[] = $file->filename() . ': ' . $e->getMessage();
+                }
+                $i++;
+            }
+
+            return ['status' => 'ok', 'renamed' => $renamed, 'errors' => $errors];
+        },
+    ],
+
+    // ── 16. Bulk tag ─────────────────────────────────────────────────────────
+    [
+        'pattern' => 'media-hub/bulk/tag',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby  = App::instance();
+            $ids    = (array) $kirby->request()->get('ids', []);
+            $tags   = array_values(array_filter(array_map('trim', (array) $kirby->request()->get('tags', []))));
+            $action = trim((string) $kirby->request()->get('action', 'add')); // add | remove | set
+
+            $updated = 0;
+            $errors  = [];
+
+            foreach ($ids as $encodedId) {
+                $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
+                $file = $kirby->file($id);
+                if (!$file) { $errors[] = basename($id) . ' not found'; continue; }
+
+                $raw      = (string) $file->content()->get('tags')->value();
+                $existing = $raw !== '' ? array_map('trim', explode(',', $raw)) : [];
+
+                if ($action === 'set') {
+                    $newTags = $tags;
+                } elseif ($action === 'remove') {
+                    $newTags = array_values(array_diff($existing, $tags));
+                } else {
+                    $newTags = array_values(array_unique(array_merge($existing, $tags)));
+                }
+
+                try {
+                    $kirby->impersonate('kirby', function () use ($file, $newTags) {
+                        $file->update(['tags' => implode(', ', $newTags)]);
+                    });
+                    $updated++;
+                } catch (\Throwable $e) {
+                    $errors[] = $file->filename() . ': ' . $e->getMessage();
+                }
+            }
+
+            return ['status' => 'ok', 'updated' => $updated, 'errors' => $errors];
+        },
+    ],
+
+    // ── 17. Duplicate detection ──────────────────────────────────────────────
+    [
+        'pattern' => 'media-hub/duplicates',
+        'method'  => 'GET',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $root  = $kirby->page($slug);
+
+            if (!$root) {
+                return ['exact' => [], 'similar' => [], 'stats' => ['exactGroups' => 0, 'exactWasted' => 0, 'similarGroups' => 0]];
+            }
+
+            // Gather all files once
+            $allFiles = [];
+            foreach ($root->files() as $f)  $allFiles[] = $f;
+            foreach ($root->index() as $child) {
+                foreach ($child->files() as $f) $allFiles[] = $f;
+            }
+
+            // Compute MD5 hashes once (reused for both exact + similar checks)
+            $hashById = [];
+            foreach ($allFiles as $file) {
+                $hashById[$file->id()] = md5_file($file->root());
+            }
+
+            // ── Exact duplicates (identical content by hash) ─────────────────
+            $hashMap = [];
+            foreach ($allFiles as $file) {
+                $h = $hashById[$file->id()];
+                $hashMap[$h][] = $file;
+            }
+
+            $exactGroups    = [];
+            $exactHashSet   = [];
+            foreach ($hashMap as $hash => $group) {
+                if (count($group) < 2) continue;
+                $exactHashSet[] = $hash;
+                usort($group, fn ($a, $b) => $a->modified() <=> $b->modified());
+                $exactGroups[] = [
+                    'hash'  => $hash,
+                    'files' => array_map(fn ($f) => mediaHubSerializeFile($f), $group),
+                ];
+            }
+
+            // ── Similar names (same base after stripping version suffixes) ────
+            $getBase = function (string $filename): string {
+                $name = mb_strtolower(pathinfo($filename, PATHINFO_FILENAME));
+                $patterns = [
+                    '/-+final$/i', '/-+copy$/i', '/-+v\d+$/i', '/-+\d+$/',
+                    '/_+\d+$/',    '/\(\d+\)$/', '/-+new$/i',   '/-+old$/i',
+                    '/-+backup$/i','/-+revised$/i','/-+updated$/i','/-+original$/i',
+                ];
+                $prev = null;
+                while ($prev !== $name) {
+                    $prev = $name;
+                    foreach ($patterns as $p) {
+                        $name = preg_replace($p, '', $name);
+                    }
+                }
+                return trim($name, '-_ ');
+            };
+
+            $nameMap = [];
+            foreach ($allFiles as $file) {
+                $base = $getBase($file->filename());
+                if (mb_strlen($base) < 3) continue; // skip very short stems
+                $nameMap[$base][] = $file;
+            }
+
+            $similarGroups = [];
+            foreach ($nameMap as $base => $group) {
+                if (count($group) < 2) continue;
+                // If the whole group shares one hash, it's already in exactGroups
+                $groupHashes = array_unique(array_map(fn ($f) => $hashById[$f->id()], $group));
+                if (count($groupHashes) === 1 && in_array(reset($groupHashes), $exactHashSet, true)) continue;
+                usort($group, fn ($a, $b) => strcmp($a->filename(), $b->filename()));
+                $similarGroups[] = [
+                    'baseName' => $base,
+                    'files'    => array_map(fn ($f) => mediaHubSerializeFile($f), $group),
+                ];
+            }
+
+            $exactWasted = (int) array_sum(array_map(fn ($g) => count($g['files']) - 1, $exactGroups));
+
+            return [
+                'exact'   => $exactGroups,
+                'similar' => $similarGroups,
+                'stats'   => [
+                    'exactGroups'   => count($exactGroups),
+                    'exactWasted'   => $exactWasted,
+                    'similarGroups' => count($similarGroups),
                 ],
             ];
         },

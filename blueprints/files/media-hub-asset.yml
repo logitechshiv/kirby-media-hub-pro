@@ -32,3 +32,14 @@ fields:
     type: date
     default: today
     width: 1/2
+
+  tags:
+    label: Tags
+    type: text
+    width: 1/1
+
+  uploadedby:
+    label: Uploaded By
+    type: text
+    width: 1/2
+    disabled: true

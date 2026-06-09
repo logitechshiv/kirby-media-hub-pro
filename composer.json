@@ -1,8 +1,8 @@
 {
   "name": "kirbycode/media-hub",
-  "description": "Centralized media library for Kirby CMS 5 — WordPress-style asset management with folder organisation, metadata, search, and a custom picker field.",
+  "description": "Centralized media library for Kirby CMS 5 — folders, tags, smart filters, bulk operations, duplicate detection, and a custom picker field.",
   "type": "kirby-plugin",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "license": "MIT",
   "authors": [
     {
@@ -19,10 +19,10 @@
     "asset-management",
     "kirby5"
   ],
-  "homepage": "https://github.com/logitechshiv/kirby-media-hub",
+  "homepage": "https://github.com/logitechshiv/kirby-media-hub-pro",
   "support": {
-    "issues": "https://github.com/logitechshiv/kirby-media-hub/issues",
-    "source": "https://github.com/logitechshiv/kirby-media-hub"
+    "issues": "https://github.com/logitechshiv/kirby-media-hub-pro/issues",
+    "source": "https://github.com/logitechshiv/kirby-media-hub-pro"
   },
   "require": {
     "getkirby/cms": "^5.0"

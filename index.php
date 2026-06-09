@@ -31,11 +31,24 @@ App::plugin('kirbycode/media-hub', [
                             $folders = [];
                             if ($root) {
                                 foreach ($root->children()->listed() as $p) {
+                                    $childList = [];
+                                    foreach ($p->children()->listed() as $c) {
+                                        $childList[] = [
+                                            'id'        => $c->id(),
+                                            'slug'      => $c->slug(),
+                                            'path'      => $p->slug() . '/' . $c->slug(),
+                                            'title'     => $c->title()->value(),
+                                            'fileCount' => $c->files()->count(),
+                                            'children'  => [],
+                                        ];
+                                    }
                                     $folders[] = [
                                         'id'        => $p->id(),
                                         'slug'      => $p->slug(),
+                                        'path'      => $p->slug(),
                                         'title'     => $p->title()->value(),
                                         'fileCount' => $p->files()->count(),
+                                        'children'  => $childList,
                                     ];
                                 }
                             }
@@ -65,11 +78,24 @@ App::plugin('kirbycode/media-hub', [
                             $folders = [];
                             if ($root) {
                                 foreach ($root->children()->listed() as $p) {
+                                    $childList = [];
+                                    foreach ($p->children()->listed() as $c) {
+                                        $childList[] = [
+                                            'id'        => $c->id(),
+                                            'slug'      => $c->slug(),
+                                            'path'      => $p->slug() . '/' . $c->slug(),
+                                            'title'     => $c->title()->value(),
+                                            'fileCount' => $c->files()->count(),
+                                            'children'  => [],
+                                        ];
+                                    }
                                     $folders[] = [
                                         'id'        => $p->id(),
                                         'slug'      => $p->slug(),
+                                        'path'      => $p->slug(),
                                         'title'     => $p->title()->value(),
                                         'fileCount' => $p->files()->count(),
+                                        'children'  => $childList,
                                     ];
                                 }
                             }
@@ -113,6 +139,27 @@ App::plugin('kirbycode/media-hub', [
     'hooks' => [
         'system.loadPlugins:after' => function () {
             \Kirbycode\MediaHub\MediaHubSetup::ensureStructure();
+        },
+
+        // Capture the uploading user whenever a file is created inside media-hub
+        'file.create:after' => function ($file) {
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            if (!str_starts_with($file->parent()->id(), $slug)) {
+                return;
+            }
+            $user = $kirby->user();
+            if (!$user) return;
+            try {
+                $display = $user->name()->isNotEmpty()
+                    ? (string) $user->name()
+                    : $user->email();
+                $kirby->impersonate('kirby', function () use ($file, $display) {
+                    $file->update(['uploadedby' => $display]);
+                });
+            } catch (\Throwable $e) {
+                // non-critical — don't break the upload if this fails
+            }
         },
     ],
 
