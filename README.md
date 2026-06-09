@@ -50,17 +50,10 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 
 ## Installation
 
-### Composer (recommended)
-
-```bash
-composer require kirbycode/media-hub
-```
-
-### Manual
-
-1. Download or clone this repository.
-2. Copy the `media-hub-pro` folder into your site's `site/plugins/` directory.
-3. The plugin auto-creates `content/media-hub/` on the first page load — no further setup needed.
+1. Purchase a license at [kirbycode.com](https://kirbycode.com)
+2. Download the plugin zip from your account
+3. Extract and copy the `media-hub-pro` folder into your site's `site/plugins/` directory
+4. The plugin auto-creates `content/media-hub/` on the first page load — no further setup needed
 
 ---
 
