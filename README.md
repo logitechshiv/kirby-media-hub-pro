@@ -10,9 +10,8 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 
 | Version | Price | Key additions |
 |---------|-------|---------------|
-| **V1 — Pro** | €50 | Folders, search, metadata, picker field, usage tracking, stats |
-| **V2 — Pro Smart** | €90 | + 2-level subfolders, tags, smart filters, bulk operations, duplicate detection |
-| **V3 — Pro Smart Advance** | TBD | + Auto WebP conversion, image compression, upload progress indicator |
+| **V1 — Pro** | Free | Folders, search, metadata, picker field, usage tracking, stats |
+| **V2 — Pro Smart** | €90 | + 2-level subfolders, tags, smart filters, bulk operations, duplicate detection, auto WebP conversion, image compression, upload progress indicator |
 
 ---
 
@@ -31,7 +30,7 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 - **Auto-refresh stats** — counters update immediately after upload or delete
 - **No build step** — pure PHP + Vue 3 template strings
 
-### V2 — Pro Smart additions
+### V2 — Pro Smart
 - **2-level subfolder support** — nested folders in the sidebar with expand/collapse, breadcrumbs, correct upload URLs
 - **Tags & Keywords** — tag files with comma-separated keywords; tag cloud in sidebar with click-to-filter
 - **Delete tag globally** — remove a tag from all files at once with a single click (hover × on any tag)
@@ -39,8 +38,6 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 - **Bulk Operations** — select multiple files → bulk delete, bulk move to folder, bulk rename (pattern `file-{n}`), bulk tag assignment (add / remove / replace)
 - **Duplicate Detection** — scan for exact duplicates (MD5 hash) and similar-named files; keep oldest, newest, or shortest name with one click
 - **Improved picker** — sidebar layout with scrollable folder tree (subfolders collapsible) + tag filter; replaces flat tab row that broke at scale
-
-### V3 — Pro Smart Advance additions
 - **Auto WebP conversion on upload** — JPEG and PNG files are automatically converted to WebP on upload using PHP GD; original file and sidecar are replaced, UUID is preserved so all existing page references continue to work
 - **In-place WebP compression** — existing WebP files are re-encoded at optimised quality; file is only replaced if the result is strictly smaller
 - **Re-optimize button** — manually trigger optimization on any image from the file detail panel
