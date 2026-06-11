@@ -3,6 +3,7 @@
 use Kirby\Cms\App;
 
 require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
+require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
 
 App::plugin('kirbycode/media-hub', [
 
@@ -159,6 +160,13 @@ App::plugin('kirbycode/media-hub', [
                 });
             } catch (\Throwable $e) {
                 // non-critical — don't break the upload if this fails
+            }
+
+            // Convert to WebP and compress (sidecar copy preserves UUID + metadata)
+            try {
+                \Kirbycode\MediaHub\MediaOptimizer::optimizeOnUpload($file);
+            } catch (\Throwable $e) {
+                // non-critical — never break the upload
             }
         },
     ],

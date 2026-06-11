@@ -450,6 +450,57 @@ li.k-media-hub-folder-entry:hover {
   color: var(--color-focus, #2563eb);
 }
 
+.k-media-hub-dropzone.is-uploading {
+  cursor: default;
+  border-style: solid;
+  border-color: var(--color-focus, #2563eb);
+  background: rgba(37, 99, 235, 0.04);
+  color: var(--color-text, #1a1a1a);
+}
+
+/* Upload progress overlay */
+.k-media-hub-upload-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.25rem 1rem;
+}
+
+.k-media-hub-upload-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-focus, #2563eb);
+}
+
+.k-media-hub-upload-bar-wrap {
+  width: 100%;
+  max-width: 320px;
+  height: 4px;
+  background: var(--color-border, #e5e5e5);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.k-media-hub-upload-bar {
+  height: 100%;
+  background: var(--color-focus, #2563eb);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+  min-width: 8px;
+}
+
+/* Spinner for upload zone */
+.k-media-hub-upload-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(37, 99, 235, 0.2);
+  border-top-color: var(--color-focus, #2563eb);
+  border-radius: 50%;
+  animation: k-media-hub-spin 0.7s linear infinite;
+}
+
 /* ── File grid ────────────────────────────────────────────────────────── */
 .k-media-hub-grid {
   display: grid;
@@ -918,6 +969,59 @@ li.k-media-hub-folder-entry:hover {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+}
+
+/* ── Media Optimization section ────────────────────────────────────────── */
+.k-media-hub-optimize-section {
+  border-top: 1px solid var(--color-border, #e5e5e5);
+  padding-top: 0.85rem;
+}
+
+.k-media-hub-optimize-section .k-media-hub-section-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-gray-600, #6b7280);
+  margin-bottom: 0.5rem;
+}
+
+.k-media-hub-optimize-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.k-media-hub-opt-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: var(--color-blue-200, #dbeafe);
+  color: var(--color-blue-700, #1d4ed8);
+}
+
+.k-media-hub-opt-badge--webp {
+  background: var(--color-green-100, #dcfce7);
+  color: var(--color-green-700, #15803d);
+}
+
+.k-media-hub-opt-badge--avif {
+  background: var(--color-purple-100, #f3e8ff);
+  color: var(--color-purple-700, #7e22ce);
+}
+
+.k-media-hub-btn--outlined {
+  background: transparent;
+  border: 1px solid var(--color-border, #e5e5e5);
+  color: var(--color-text, #1a1a1a);
+}
+
+.k-media-hub-btn--outlined:hover:not(:disabled) {
+  background: var(--color-gray-100, #f3f4f6);
 }
 
 .k-media-hub-detail-danger {

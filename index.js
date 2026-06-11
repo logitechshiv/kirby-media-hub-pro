@@ -22,6 +22,9 @@ window.panel.plugin('kirbycode/media-hub', {
           expandedFolders:  [],
           files:            [],
           loading:          false,
+          uploading:        false,
+          uploadCurrent:    0,
+          uploadTotal:      0,
           pagination:       { total: 0, page: 1, limit: 40 },
           searchQuery:      '',
           activeType:       '',
@@ -331,24 +334,22 @@ window.panel.plugin('kirbycode/media-hub', {
         },
 
         async uploadFiles(fileList) {
-          // Derive the Kirby API base URL from the apiUrl prop.
-          // apiUrl = 'http://host/api/media-hub' → base = 'http://host/api/'
           const apiBase = this.apiUrl.replace(/\/media-hub\/?$/, '/');
-          // CSRF token: try Kirby 5 Panel store locations
-          const csrf = this.$panel?.system?.csrf
-                    || window.panel?.system?.csrf
-                    || '';
+          const csrf    = this.$panel?.system?.csrf || window.panel?.system?.csrf || '';
+          const total   = fileList.length;
+
+          this.uploading     = true;
+          this.uploadTotal   = total;
+          this.uploadCurrent = 0;
 
           let uploaded = 0;
           for (const file of fileList) {
+            this.uploadCurrent++;
             const fd = new FormData();
             fd.append('file', file);
             fd.append('filename', file.name);
             fd.append('template', 'media-hub-asset');
             try {
-              // Use fetch() directly — $panel.api.post() may JSON-encode the body
-              // which would corrupt the multipart upload. fetch() + FormData keeps
-              // the browser-set Content-Type boundary intact.
               const uploadUrl = apiBase + this.currentUploadUrl;
               const headers   = {};
               if (csrf) headers['X-CSRF'] = csrf;
@@ -369,6 +370,11 @@ window.panel.plugin('kirbycode/media-hub', {
               this.$panel.notification.error('Upload failed: ' + file.name + (e.message ? ' — ' + e.message : ''));
             }
           }
+
+          this.uploading     = false;
+          this.uploadCurrent = 0;
+          this.uploadTotal   = 0;
+
           if (uploaded > 0) {
             this.$panel.notification.success(uploaded + ' file' + (uploaded > 1 ? 's' : '') + ' uploaded');
             this.loadFiles();
@@ -525,6 +531,29 @@ window.panel.plugin('kirbycode/media-hub', {
           this.loadFolders();
           this.loadTags();
           this.loadUploaders();
+        },
+
+        async onFileOptimized({ id, uuid, converted, newId }) {
+          if (converted && newId) {
+            // File ID changed (JPEG/PNG → WebP) — reload list and find the new file by UUID
+            await this.loadFiles();
+            const found = this.files.find(f => f.uuid === uuid);
+            this.activeFile = found || null;
+          } else {
+            // Compressed in-place — re-fetch same file to show updated size
+            try {
+              const encoded = encodeURIComponent(id).replace(/%2F/g, '+');
+              const res     = await this.$panel.api.get('media-hub/files/' + encoded);
+              if (res && res.id) {
+                this.activeFile = res;
+                const idx = this.files.findIndex(f => f.id === id);
+                if (idx !== -1) this.files[idx] = res;
+              }
+            } catch (e) {
+              // non-critical
+            }
+          }
+          this.statsRefreshKey++;
         },
       },
 
@@ -883,17 +912,33 @@ window.panel.plugin('kirbycode/media-hub', {
 
               </div>
 
-              <!-- Drop zone -->
+              <!-- Drop zone / upload progress -->
               <div
                 ref="dropzone"
-                class="k-media-hub-dropzone"
+                :class="['k-media-hub-dropzone', { 'is-uploading': uploading }]"
                 @drop="onDrop"
                 @dragover="onDragOver"
                 @dragleave="onDragLeave"
-                @click="triggerUpload"
+                @click="!uploading && triggerUpload()"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-                Drop files here or click to upload
+                <template v-if="uploading">
+                  <div class="k-media-hub-upload-progress">
+                    <div class="k-media-hub-upload-spinner"></div>
+                    <div class="k-media-hub-upload-label">
+                      Uploading &amp; optimizing {{ uploadCurrent }} of {{ uploadTotal }}…
+                    </div>
+                    <div class="k-media-hub-upload-bar-wrap">
+                      <div
+                        class="k-media-hub-upload-bar"
+                        :style="{ width: Math.round((uploadCurrent - 1) / uploadTotal * 100) + '%' }"
+                      ></div>
+                    </div>
+                  </div>
+                </template>
+                <template v-else>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                  Drop files here or click to upload
+                </template>
               </div>
 
               <!-- Loading -->
@@ -950,6 +995,7 @@ window.panel.plugin('kirbycode/media-hub', {
             @close="closeDetail"
             @updated="onFileUpdated"
             @deleted="onFileDeleted"
+            @optimized="onFileOptimized"
           />
 
         </div>
@@ -1078,7 +1124,7 @@ window.panel.plugin('kirbycode/media-hub', {
         apiUrl:  { type: String, required: true },
         allTags: { type: Array,  default: () => [] },
       },
-      emits: ['close', 'updated', 'deleted'],
+      emits: ['close', 'updated', 'deleted', 'optimized'],
 
       data() {
         return {
@@ -1090,9 +1136,10 @@ window.panel.plugin('kirbycode/media-hub', {
             photographer: this.file.photographer || '',
             tags:         [...(this.file.tags    || [])],
           },
-          tagInput: '',
-          saving:   false,
-          deleting: false,
+          tagInput:   '',
+          saving:     false,
+          deleting:   false,
+          optimizing: false,
         };
       },
 
@@ -1160,6 +1207,39 @@ window.panel.plugin('kirbycode/media-hub', {
           } catch (e) {
             this.$panel.notification.error('Delete failed: ' + (e.message || e));
             this.deleting = false;
+          }
+        },
+
+        async optimizeFile() {
+          this.optimizing = true;
+          try {
+            const res  = await this.$panel.api.post('media-hub/files/' + this.encodedId + '/optimize', {});
+            const data = (res && res.data) ? res.data : (res || {});
+            const c    = data.compressed;
+            let msg;
+
+            if (!c) {
+              msg = 'No change — GD extension not available, or file type not supported';
+            } else if (c.saved > 0) {
+              const before = (c.originalSize / 1024 / 1024).toFixed(2);
+              const after  = (c.newSize / 1024 / 1024).toFixed(2);
+              msg = 'Saved ' + c.percent + '% · ' + before + ' MB → ' + after + ' MB';
+              if (data.converted) msg += ' · Converted to WebP';
+            } else {
+              msg = 'Already optimal — no further size reduction possible';
+            }
+
+            this.$panel.notification.success(msg);
+            this.$emit('optimized', {
+              id:        this.file.id,
+              uuid:      data.uuid      || null,
+              converted: data.converted || false,
+              newId:     data.newId     || null,
+            });
+          } catch (e) {
+            this.$panel.notification.error('Optimization failed: ' + (e.message || String(e)));
+          } finally {
+            this.optimizing = false;
           }
         },
       },
@@ -1251,6 +1331,22 @@ window.panel.plugin('kirbycode/media-hub', {
             :uuid="file.uuid"
             :api-url="apiUrl"
           />
+
+          <!-- Media Optimization (images only, not SVG/GIF) -->
+          <div v-if="file.type === 'image' && !['svg','gif'].includes(file.extension)" class="k-media-hub-optimize-section">
+            <div class="k-media-hub-section-label">Media Optimization</div>
+            <div class="k-media-hub-optimize-badges">
+              <span v-if="['jpg','jpeg','png'].includes(file.extension)" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">→ WebP</span>
+              <span v-if="file.extension === 'webp'" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">WebP ✓</span>
+              <span class="k-media-hub-opt-badge">Compress</span>
+            </div>
+            <button
+              type="button"
+              class="k-media-hub-btn k-media-hub-btn--outlined k-media-hub-btn--full"
+              :disabled="optimizing"
+              @click="optimizeFile"
+            >{{ optimizing ? 'Optimizing…' : 'Re-optimize' }}</button>
+          </div>
 
           <div class="k-media-hub-detail-danger">
             <button

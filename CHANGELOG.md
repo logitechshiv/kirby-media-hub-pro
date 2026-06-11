@@ -7,6 +7,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [3.0.0] — 2026-06-11
+
+### Added
+
+- **Auto WebP conversion on upload** — JPEG and PNG files are automatically converted to WebP by PHP GD when uploaded to the Media Hub; the original file and its `.txt` sidecar are replaced by a `.webp` file carrying the same UUID, so all `file://` references in content continue to resolve without any manual edits
+- **PNG transparency preservation** — alpha channel is retained when converting PNG to WebP
+- **In-place WebP compression** — existing WebP files are re-encoded at the configured quality level; the file is only replaced if the result is strictly smaller than the original
+- **Re-optimize button** — manually trigger optimization on any image from the file detail panel; shows a success notification with bytes saved, percentage reduction, and whether a format conversion occurred
+- **Upload progress indicator** — animated spinner and progress bar displayed in the drop zone while upload and server-side optimization run; label shows "Uploading & optimizing X of Y…"
+- **Optimization badges** in the file grid — "→ WebP" badge on JPEG/PNG files (will be converted), "WebP ✓" badge on WebP files (already optimized format)
+- **`kirbycode.media-hub.optimization` config key** — control optimization globally (`enabled`), set WebP output quality (`quality.webp`, default 82); all keys are optional with safe defaults
+- GD availability check — if the GD extension is not loaded, upload always succeeds and optimization is silently skipped; the Re-optimize button reports "GD not available" instead of failing
+
+### Fixed
+
+- Re-optimize button showed "0 variants registered" and did nothing — root cause was use of Kirby's lazy `$file->thumb()` which does not generate files server-side; replaced with direct PHP GD calls
+- JPEG was not converted to WebP on upload — conversion was never implemented in earlier optimization stub; now handled by `convertToWebP()` in `MediaOptimizer`
+- `onFileOptimized()` threw `TypeError: Cannot read properties of undefined (reading 'find')` on re-optimize — root cause was reference to `this.localFiles` which does not exist; corrected to `this.files`
+- `$panel.api.post()` called without a body argument could silently fail — all optimize POST calls now pass an explicit `{}` body
+
+---
+
 ## [2.0.0] — 2026-06-09
 
 ### Added

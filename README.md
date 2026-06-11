@@ -12,6 +12,7 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 |---------|-------|---------------|
 | **V1 — Pro** | €50 | Folders, search, metadata, picker field, usage tracking, stats |
 | **V2 — Pro Smart** | €90 | + 2-level subfolders, tags, smart filters, bulk operations, duplicate detection |
+| **V3 — Pro Smart Advance** | TBD | + Auto WebP conversion, image compression, upload progress indicator |
 
 ---
 
@@ -39,12 +40,19 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 - **Duplicate Detection** — scan for exact duplicates (MD5 hash) and similar-named files; keep oldest, newest, or shortest name with one click
 - **Improved picker** — sidebar layout with scrollable folder tree (subfolders collapsible) + tag filter; replaces flat tab row that broke at scale
 
+### V3 — Pro Smart Advance additions
+- **Auto WebP conversion on upload** — JPEG and PNG files are automatically converted to WebP on upload using PHP GD; original file and sidecar are replaced, UUID is preserved so all existing page references continue to work
+- **In-place WebP compression** — existing WebP files are re-encoded at optimised quality; file is only replaced if the result is strictly smaller
+- **Re-optimize button** — manually trigger optimization on any image from the file detail panel
+- **Upload progress indicator** — animated progress bar and spinner shown in the drop zone while upload and optimization run; shows "Uploading & optimizing X of Y…"
+
 ---
 
 ## Requirements
 
 - Kirby CMS **5.0** or higher
 - PHP **8.1** or higher
+- PHP **GD extension** — required for V3 auto WebP conversion and compression (usually bundled with PHP; check with `php -m | grep gd`)
 
 ---
 
@@ -66,8 +74,24 @@ return [
     // Change the slug of the hub root page (default: 'media-hub').
     // Useful if your site already has a page at that slug.
     'kirbycode.media-hub.root-slug' => 'media-hub',
+
+    // V3 — Media Optimization (all keys optional; shown values are defaults)
+    'kirbycode.media-hub.optimization' => [
+        'enabled' => true,           // set to false to disable auto-conversion on upload
+        'quality' => [
+            'webp' => 82,            // WebP output quality (0–100)
+        ],
+    ],
 ];
 ```
+
+### Media Optimization notes (V3)
+
+- JPEG and PNG uploads are automatically converted to **WebP** server-side on upload. The original file is deleted; the new `.webp` file carries the same UUID so all `file://` references in content continue to resolve without any manual edits.
+- **PNG transparency** is preserved during conversion.
+- **SVG and GIF** files are never converted.
+- If PHP GD is not available the upload still succeeds — no error is thrown; optimization is silently skipped.
+- The **Re-optimize** button in the file detail panel triggers the same conversion on demand. For files already in WebP format it attempts in-place compression and reports how many bytes were saved.
 
 ---
 

@@ -257,7 +257,29 @@ return [
         },
     ],
 
-    // ── 5. List folders ─────────────────────────────────────────────────────
+    // ── 5. Optimize a file (convert JPEG/PNG→WebP or compress existing WebP) ──
+    [
+        'pattern' => 'media-hub/files/(:any)/optimize',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function (string $encodedId) {
+            require_once dirname(__DIR__) . '/Optimization/MediaOptimizer.php';
+
+            $kirby = App::instance();
+            $id    = str_replace('+', '/', rawurldecode($encodedId));
+            $file  = $kirby->file($id);
+
+            if (!$file) {
+                return ['status' => 'error', 'message' => 'File not found'];
+            }
+
+            $result = \Kirbycode\MediaHub\MediaOptimizer::optimize($file);
+
+            return ['status' => 'ok', 'data' => $result];
+        },
+    ],
+
+    // ── 6. List folders ─────────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/folders',
         'method'  => 'GET',
