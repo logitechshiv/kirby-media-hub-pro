@@ -1333,10 +1333,13 @@ window.panel.plugin('kirbycode/media-hub', {
           </form>
 
           <!-- Usage tracking -->
+          <div class="k-media-hub-detail-section-heading">Usage</div>
           <k-media-hub-usage
+            v-if="file.uuid"
             :uuid="file.uuid"
             :api-url="apiUrl"
           />
+          <p v-else class="k-media-hub-usage-empty">UUID not available for this file.</p>
 
           <!-- Media Optimization (images only, not SVG/GIF) -->
           <div v-if="file.type === 'image' && !['svg','gif'].includes(file.extension)" class="k-media-hub-optimize-section">
