@@ -1613,63 +1613,6 @@ window.panel.plugin('kirbycode/media-hub', {
       `,
     },
 
-    // ── Usage tracker ──────────────────────────────────────────────────────
-    'k-media-hub-usage': {
-      props: {
-        uuid:   { type: String, required: true },
-        apiUrl: { type: String, required: true },
-      },
-      data() {
-        return {
-          open:    false,
-          usages:  [],
-          count:   '?',
-          loading: false,
-          loaded:  false,
-        };
-      },
-      methods: {
-        async toggle() {
-          this.open = !this.open;
-          if (this.open && !this.loaded) {
-            await this.loadUsages();
-          }
-        },
-        async loadUsages() {
-          this.loading = true;
-          try {
-            const res   = await this.$panel.api.get('media-hub/usage/' + encodeURIComponent(this.uuid));
-            this.usages = res.usages || [];
-            this.count  = res.count  || 0;
-            this.loaded = true;
-          } catch (e) {
-            // non-critical
-          } finally {
-            this.loading = false;
-          }
-        },
-      },
-      template: `
-        <div class="k-media-hub-usage">
-          <button class="k-media-hub-usage-toggle" @click="toggle">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            Used on {{ count }} page{{ count !== 1 ? 's' : '' }}
-            <span>{{ open ? '▲' : '▼' }}</span>
-          </button>
-          <div v-if="open">
-            <div v-if="loading" class="k-media-hub-usage-loading">Checking…</div>
-            <ul v-else-if="usages.length" class="k-media-hub-usage-list">
-              <li v-for="u in usages" :key="u.pageId">
-                <a :href="u.url" target="_blank">{{ u.title || u.pageId }}</a>
-                <small>({{ u.field }})</small>
-              </li>
-            </ul>
-            <p v-else class="k-media-hub-usage-empty">Not used on any page.</p>
-          </div>
-        </div>
-      `,
-    },
-
     // ── Media Hub Picker field component ───────────────────────────────────
     // Uses an INLINE expandable picker (no modal overlay) so it works safely
     // inside Kirby structure dialogs without triggering their outside-click handler.
