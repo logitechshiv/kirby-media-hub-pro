@@ -1145,6 +1145,11 @@ window.panel.plugin('kirbycode/media-hub', {
           saving:     false,
           deleting:   false,
           optimizing: false,
+          usageOpen:    false,
+          usageLoading: false,
+          usageLoaded:  false,
+          usageCount:   '?',
+          usageList:    [],
         };
       },
 
@@ -1158,7 +1163,11 @@ window.panel.plugin('kirbycode/media-hub', {
             photographer: newFile.photographer || '',
             tags:         [...(newFile.tags    || [])],
           };
-          this.tagInput = '';
+          this.tagInput    = '';
+          this.usageOpen   = false;
+          this.usageLoaded = false;
+          this.usageCount  = '?';
+          this.usageList   = [];
         },
       },
 
@@ -1245,6 +1254,28 @@ window.panel.plugin('kirbycode/media-hub', {
             this.$panel.notification.error('Optimization failed: ' + (e.message || String(e)));
           } finally {
             this.optimizing = false;
+          }
+        },
+
+        async toggleUsage() {
+          this.usageOpen = !this.usageOpen;
+          if (this.usageOpen && !this.usageLoaded) {
+            await this.loadUsage();
+          }
+        },
+
+        async loadUsage() {
+          if (!this.file.uuid) return;
+          this.usageLoading = true;
+          try {
+            const res      = await this.$panel.api.get('media-hub/usage/' + encodeURIComponent(this.file.uuid));
+            this.usageList  = res.usages || [];
+            this.usageCount = res.count  != null ? res.count : this.usageList.length;
+            this.usageLoaded = true;
+          } catch (e) {
+            this.usageCount = '?';
+          } finally {
+            this.usageLoading = false;
           }
         },
       },
@@ -1334,12 +1365,23 @@ window.panel.plugin('kirbycode/media-hub', {
 
           <!-- Usage tracking -->
           <div class="k-media-hub-detail-section-heading">Usage</div>
-          <k-media-hub-usage
-            v-if="file.uuid"
-            :uuid="file.uuid"
-            :api-url="apiUrl"
-          />
-          <p v-else class="k-media-hub-usage-empty">UUID not available for this file.</p>
+          <div class="k-media-hub-usage">
+            <button class="k-media-hub-usage-toggle" @click="toggleUsage">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Used on {{ usageCount }} page{{ usageCount !== 1 ? 's' : '' }}
+              <span>{{ usageOpen ? '▲' : '▼' }}</span>
+            </button>
+            <div v-if="usageOpen">
+              <div v-if="usageLoading" class="k-media-hub-usage-loading">Checking…</div>
+              <ul v-else-if="usageList.length" class="k-media-hub-usage-list">
+                <li v-for="u in usageList" :key="u.pageId">
+                  <a :href="u.url" target="_blank">{{ u.title || u.pageId }}</a>
+                  <small>({{ u.field }})</small>
+                </li>
+              </ul>
+              <p v-else class="k-media-hub-usage-empty">Not used on any page.</p>
+            </div>
+          </div>
 
           <!-- Media Optimization (images only, not SVG/GIF) -->
           <div v-if="file.type === 'image' && !['svg','gif'].includes(file.extension)" class="k-media-hub-optimize-section">
