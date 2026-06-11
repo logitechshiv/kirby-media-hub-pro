@@ -577,30 +577,32 @@ window.panel.plugin('kirbycode/media-hub', {
               </template>
             </div>
             <div class="k-media-hub-topbar-actions">
-              <button class="k-media-hub-btn" @click="toggleSearch" title="Search files">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                Search
-              </button>
-              <button class="k-media-hub-btn" @click="showNewFolder = !showNewFolder">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-                New Folder
-              </button>
-              <button
-                :class="['k-media-hub-btn', { 'k-media-hub-btn--active': showDuplicates }]"
-                @click="showDuplicates = !showDuplicates; if(showDuplicates){ selectionMode=false; selectedFiles=[]; }"
-                title="Find duplicate files"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                Duplicates
-              </button>
-              <button
-                :class="['k-media-hub-btn', { 'k-media-hub-btn--active': selectionMode }]"
-                @click="toggleSelectionMode"
-                title="Toggle selection mode"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><polyline points="9 5 11 7 15 3"/></svg>
-                Select
-              </button>
+              <div class="k-media-hub-topbar-btn-group">
+                <button class="k-media-hub-btn" @click="toggleSearch" title="Search files">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  Search
+                </button>
+                <button class="k-media-hub-btn" @click="showNewFolder = !showNewFolder">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                  New Folder
+                </button>
+                <button
+                  :class="['k-media-hub-btn', { 'k-media-hub-btn--active': showDuplicates }]"
+                  @click="showDuplicates = !showDuplicates; if(showDuplicates){ selectionMode=false; selectedFiles=[]; }"
+                  title="Find duplicate files"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Duplicates
+                </button>
+                <button
+                  :class="['k-media-hub-btn', { 'k-media-hub-btn--active': selectionMode }]"
+                  @click="toggleSelectionMode"
+                  title="Toggle selection mode"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><polyline points="9 5 11 7 15 3"/></svg>
+                  Select
+                </button>
+              </div>
               <button class="k-media-hub-btn k-media-hub-btn--primary" @click="triggerUpload">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
                 Upload
@@ -962,8 +964,11 @@ window.panel.plugin('kirbycode/media-hub', {
 
               <!-- Empty state -->
               <div v-else class="k-media-hub-empty">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                <p>No files here yet. Upload something!</p>
+                <div class="k-media-hub-empty-icon-wrap">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+                <p>No files here yet.</p>
+                <p class="k-media-hub-empty-subtitle">Drop files above or click Upload to get started.</p>
               </div>
 
               <!-- Pagination -->
@@ -1063,7 +1068,7 @@ window.panel.plugin('kirbycode/media-hub', {
       },
       template: `
         <div
-          :class="['k-media-hub-file-card', { 'is-selected': selected, 'is-selection-mode': selectionMode }]"
+          :class="['k-media-hub-file-card', 'k-media-hub-file-card--' + file.type, { 'is-selected': selected, 'is-selection-mode': selectionMode }]"
           @click="selectionMode ? $emit('select', file) : $emit('click', file)"
         >
           <div class="k-media-hub-card-checkbox" v-if="selectionMode || selected" @click.stop="$emit('select', file)">
@@ -1274,6 +1279,7 @@ window.panel.plugin('kirbycode/media-hub', {
             />
           </div>
 
+          <div class="k-media-hub-detail-section-heading">Metadata</div>
           <form class="k-media-hub-detail-form" @submit.prevent="saveMetadata">
             <label class="k-media-hub-field">
               <span>Title</span>
@@ -1334,7 +1340,7 @@ window.panel.plugin('kirbycode/media-hub', {
 
           <!-- Media Optimization (images only, not SVG/GIF) -->
           <div v-if="file.type === 'image' && !['svg','gif'].includes(file.extension)" class="k-media-hub-optimize-section">
-            <div class="k-media-hub-section-label">Media Optimization</div>
+            <div class="k-media-hub-detail-section-heading">Optimization</div>
             <div class="k-media-hub-optimize-badges">
               <span v-if="['jpg','jpeg','png'].includes(file.extension)" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">→ WebP</span>
               <span v-if="file.extension === 'webp'" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">WebP ✓</span>
@@ -1348,12 +1354,15 @@ window.panel.plugin('kirbycode/media-hub', {
             >{{ optimizing ? 'Optimizing…' : 'Re-optimize' }}</button>
           </div>
 
-          <div class="k-media-hub-detail-danger">
-            <button
-              class="k-media-hub-btn k-media-hub-btn--danger k-media-hub-btn--full"
-              :disabled="deleting"
-              @click="deleteFile"
-            >{{ deleting ? 'Deleting…' : 'Delete File' }}</button>
+          <div class="k-media-hub-detail-danger-section">
+            <div class="k-media-hub-detail-section-heading" style="color:var(--color-negative,#e53e3e)">Danger Zone</div>
+            <div class="k-media-hub-detail-danger">
+              <button
+                class="k-media-hub-btn k-media-hub-btn--danger k-media-hub-btn--full"
+                :disabled="deleting"
+                @click="deleteFile"
+              >{{ deleting ? 'Deleting…' : 'Delete File' }}</button>
+            </div>
           </div>
         </div>
       `,
