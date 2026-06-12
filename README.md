@@ -11,7 +11,7 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 | Version | Price | Key additions |
 |---------|-------|---------------|
 | **V1 — Pro** | Free | Folders, search, metadata, picker field, usage tracking, stats |
-| **V2 — Pro Smart** | €90 | + 2-level subfolders, tags, smart filters, bulk operations, duplicate detection, auto WebP conversion, image compression, upload progress indicator |
+| **V2 — Pro Smart** | €30 | + 2-level subfolders, tags, smart filters, bulk operations, duplicate detection, auto WebP conversion, image compression, upload progress indicator |
 
 ---
 
