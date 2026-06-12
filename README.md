@@ -11,7 +11,7 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 | Version | Price | Key additions |
 |---------|-------|---------------|
 | **V1 — Pro** | Free | Folders, search, metadata, picker field, usage tracking, stats |
-| **V2 — Pro Smart** | €30 | + 2-level subfolders, tags, smart filters, bulk operations, duplicate detection, auto WebP conversion, image compression, upload progress indicator |
+| **V2 — Pro Smart** | €40 | + 2-level subfolders, tags, smart filters, bulk operations, duplicate detection, auto WebP conversion, image compression, upload progress indicator |
 
 ---
 
@@ -68,6 +68,10 @@ All options go in your site's `config/config.php`:
 
 ```php
 return [
+    // Your Media Hub Pro license key (required for V2 Pro Smart features).
+    // Purchase a license at kirbycode.com — omit this key to run in Free (V1) mode.
+    'kirbycode.media-hub.license' => 'MHPRO-XXXX-XXXX-XXXX-XXXX',
+
     // Change the slug of the hub root page (default: 'media-hub').
     // Useful if your site already has a page at that slug.
     'kirbycode.media-hub.root-slug' => 'media-hub',
