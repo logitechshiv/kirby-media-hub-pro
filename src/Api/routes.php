@@ -4,6 +4,18 @@ use Kirby\Cms\App;
 use Kirby\Cms\File;
 use Kirby\Toolkit\Str;
 
+function mediaHubRequirePro(): ?\Kirby\Http\Response
+{
+    if (!\Kirbycode\MediaHub\LicenseManager::isPro()) {
+        return \Kirby\Http\Response::json([
+            'status'  => 'error',
+            'code'    => 402,
+            'message' => 'This feature requires Media Hub Pro. Get your license at kirbycode.com',
+        ], 402);
+    }
+    return null;
+}
+
 /**
  * Serialize a Kirby File to an array for API responses.
  */
@@ -53,6 +65,27 @@ function mediaHubSerializeFile(File $file, bool $detailed = false): array
  * Patterns are relative to /api/ — e.g. 'media-hub/files' → GET /api/media-hub/files
  */
 return [
+
+    // ── License status ──────────────────────────────────────────────────────
+    [
+        'pattern' => 'media-hub/license/status',
+        'method'  => 'GET',
+        'auth'    => true,
+        'action'  => function () {
+            return \Kirbycode\MediaHub\LicenseManager::getStatus();
+        },
+    ],
+
+    // ── License re-check (bust cache + re-validate) ─────────────────────────
+    [
+        'pattern' => 'media-hub/license/recheck',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function () {
+            \Kirbycode\MediaHub\LicenseManager::bustCache();
+            return \Kirbycode\MediaHub\LicenseManager::getStatus();
+        },
+    ],
 
     // ── 1. List files ───────────────────────────────────────────────────────
     // If ?folder=slug is set, returns only that folder's files.
@@ -263,6 +296,7 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function (string $encodedId) {
+            if ($guard = mediaHubRequirePro()) return $guard;
             require_once dirname(__DIR__) . '/Optimization/MediaOptimizer.php';
 
             $kirby = App::instance();
@@ -687,6 +721,7 @@ return [
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -718,6 +753,7 @@ return [
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -763,6 +799,7 @@ return [
         'method'  => 'DELETE',
         'auth'    => true,
         'action'  => function (string $encodedTag) {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -804,6 +841,7 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby   = App::instance();
             $ids     = (array) $kirby->request()->get('ids', []);
             $deleted = 0;
@@ -831,6 +869,7 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby        = App::instance();
             $slug         = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids          = (array) $kirby->request()->get('ids', []);
@@ -884,6 +923,7 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby   = App::instance();
             $ids     = (array) $kirby->request()->get('ids', []);
             $pattern = trim((string) $kirby->request()->get('pattern', ''));
@@ -926,6 +966,7 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby  = App::instance();
             $ids    = (array) $kirby->request()->get('ids', []);
             $tags   = array_values(array_filter(array_map('trim', (array) $kirby->request()->get('tags', []))));
@@ -970,6 +1011,7 @@ return [
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = mediaHubRequirePro()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);

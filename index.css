@@ -2069,3 +2069,280 @@ li.k-media-hub-folder-entry:hover {
   color: var(--color-text-dimmed, #bbb);
   margin: 0;
 }
+
+/* ── Locked (Pro) button state ───────────────────────────────────────────── */
+.k-media-hub-btn--locked {
+  opacity: 0.45;
+  text-decoration: none;
+  cursor: default;
+  pointer-events: auto;
+}
+.k-media-hub-btn--locked:hover {
+  opacity: 0.75;
+  background: var(--color-background, #f5f5f5);
+  cursor: pointer;
+}
+
+/* ── License badge in topbar ─────────────────────────────────────────────── */
+.k-media-hub-license-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  text-decoration: none;
+  letter-spacing: 0.03em;
+  transition: opacity 0.15s;
+}
+.k-media-hub-license-badge:hover { opacity: 0.8; }
+
+.k-media-hub-license-badge--pro {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+  border: 1px solid rgba(22, 163, 74, 0.25);
+}
+.k-media-hub-license-badge--free {
+  background: var(--color-background, #f0f0f0);
+  color: var(--color-text-dimmed, #888);
+  border: 1px solid var(--color-border, #ddd);
+}
+
+/* ── Detail panel upgrade CTA ────────────────────────────────────────────── */
+.k-media-hub-detail-upgrade {
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--color-border, #eee);
+}
+.k-media-hub-detail-upgrade-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: linear-gradient(135deg, rgba(37,99,235,0.06) 0%, rgba(124,58,237,0.06) 100%);
+  border: 1px solid rgba(37,99,235,0.15);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  color: var(--color-text, #1a1a1a);
+}
+.k-media-hub-detail-upgrade-inner > svg {
+  flex-shrink: 0;
+  color: #d97706;
+}
+.k-media-hub-detail-upgrade-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.k-media-hub-detail-upgrade-text strong {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.k-media-hub-detail-upgrade-text span {
+  font-size: 0.72rem;
+  color: var(--color-text-dimmed, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.k-media-hub-btn--sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* ── License page ────────────────────────────────────────────────────────── */
+.k-media-hub-license-body {
+  padding: 2rem;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
+}
+.k-media-hub-license-card {
+  background: var(--color-white, #fff);
+  border: 1px solid var(--color-border, #e5e5e5);
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.k-media-hub-license-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.k-media-hub-license-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.k-media-hub-license-dot.is-active  { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.2); }
+.k-media-hub-license-dot.is-inactive { background: var(--color-text-dimmed, #aaa); }
+.k-media-hub-license-status-label { font-size: 1rem; }
+
+.k-media-hub-license-key {
+  font-family: monospace;
+  font-size: 0.82rem;
+  background: var(--color-background, #f5f5f5);
+  border: 1px solid var(--color-border, #e5e5e5);
+  border-radius: 5px;
+  padding: 0.4rem 0.7rem;
+  color: var(--color-text-dimmed, #666);
+  letter-spacing: 0.05em;
+}
+.k-media-hub-license-meta-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.k-media-hub-license-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--color-text-dimmed, #888);
+}
+.k-media-hub-license-meta-row span:last-child { color: var(--color-text, #333); }
+.k-media-hub-license-grace span { color: #d97706 !important; }
+
+.k-media-hub-license-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.k-media-hub-license-instructions {
+  background: var(--color-white, #fff);
+  border: 1px solid var(--color-border, #e5e5e5);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+.k-media-hub-license-instructions h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+}
+.k-media-hub-license-instructions ol {
+  padding-left: 1.2rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.k-media-hub-license-instructions code {
+  background: var(--color-background, #f5f5f5);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.82rem;
+}
+.k-media-hub-license-instructions a {
+  color: var(--color-focus, #2563eb);
+}
+.k-media-hub-license-code {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  overflow-x: auto;
+  margin: 0 0 0.75rem;
+}
+.k-media-hub-license-instructions p {
+  font-size: 0.82rem;
+  color: var(--color-text-dimmed, #888);
+  margin: 0;
+}
+.k-media-hub-license-features {
+  background: var(--color-white, #fff);
+  border: 1px solid var(--color-border, #e5e5e5);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+.k-media-hub-license-features h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+}
+.k-media-hub-license-feature-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.k-media-hub-license-feature-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.k-media-hub-license-feature-list li.is-active { color: var(--color-text, #1a1a1a); }
+.k-media-hub-license-feature-list li.is-active svg { color: #16a34a; }
+.k-media-hub-license-feature-list li.is-locked { color: var(--color-text-dimmed, #aaa); }
+.k-media-hub-license-feature-list li.is-locked svg { color: var(--color-text-dimmed, #ccc); }
+
+/* ── Sidebar empty text ─────────────────────────────────────────────────── */
+.k-media-hub-sidebar-empty {
+  font-size: 0.78rem;
+  color: var(--color-text-dimmed, #aaa);
+  padding: 0.25rem 0.5rem;
+  margin: 0;
+}
+
+/* ── Pro upgrade notice ──────────────────────────────────────────────────── */
+.k-media-hub-upgrade-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  color: var(--color-text-dimmed, #bbb);
+  padding: 0.15rem 0.5rem 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.k-media-hub-upgrade-compact span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.k-media-hub-upgrade-compact svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.k-media-hub-upgrade-compact a {
+  color: var(--color-focus, #2563eb);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.k-media-hub-upgrade-compact a:hover { text-decoration: underline; }
+
+.k-media-hub-upgrade-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--color-text-dimmed, #999);
+  padding: 0.5rem 0.75rem;
+  background: var(--color-background, #f9f9f9);
+  border: 1px dashed var(--color-border, #ddd);
+  border-radius: 6px;
+  margin: 0.25rem 0;
+}
+
+.k-media-hub-upgrade-notice a {
+  color: var(--color-focus, #2563eb);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.k-media-hub-upgrade-notice a:hover {
+  text-decoration: underline;
+}

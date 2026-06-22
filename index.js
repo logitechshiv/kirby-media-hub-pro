@@ -9,10 +9,11 @@ window.panel.plugin('kirbycode/media-hub', {
     // ── Main view: sidebar + file grid + detail panel ─────────────────────
     'k-media-hub-view': {
       props: {
-        folders:       { type: Array,  default: () => [] },
-        currentFolder: { type: String, default: null },
-        apiUrl:        { type: String, required: true },
-        uploadApiBase: { type: String, required: true },
+        folders:       { type: Array,   default: () => [] },
+        currentFolder: { type: String,  default: null },
+        apiUrl:        { type: String,  required: true },
+        uploadApiBase: { type: String,  required: true },
+        isPro:         { type: Boolean, default: false },
       },
 
       data() {
@@ -194,6 +195,7 @@ window.panel.plugin('kirbycode/media-hub', {
         },
 
         async loadTags() {
+          if (!this.isPro) return;
           try {
             const res = await this.$panel.api.get('media-hub/tags');
             this.availableTags = res.data || [];
@@ -218,6 +220,7 @@ window.panel.plugin('kirbycode/media-hub', {
         },
 
         async loadUploaders() {
+          if (!this.isPro) return;
           try {
             const res = await this.$panel.api.get('media-hub/uploaders');
             this.uploaders = res.data || [];
@@ -266,6 +269,7 @@ window.panel.plugin('kirbycode/media-hub', {
           const parentPath = (this.activeFolderPath && !this.activeFolderPath.includes('/'))
             ? this.activeFolderPath
             : '';
+          if (parentPath && !this.isPro) return;
           try {
             const res = await this.$panel.api.post('media-hub/folders', { title, parent: parentPath });
             if (res.status === 'ok') {
@@ -569,6 +573,15 @@ window.panel.plugin('kirbycode/media-hub', {
               </a>
               <span class="k-media-hub-breadcrumb-sep">/</span>
               <span class="k-media-hub-breadcrumb-current k-media-hub-breadcrumb-link" @click="selectFolder(null)">Media Hub</span>
+              <a
+                :href="panelUrl + '/media-hub/license'"
+                :class="['k-media-hub-license-badge', isPro ? 'k-media-hub-license-badge--pro' : 'k-media-hub-license-badge--free']"
+                title="License status"
+              >
+                <svg v-if="isPro" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                {{ isPro ? 'Pro' : 'Free' }}
+              </a>
               <template v-if="activeFolderPath">
                 <template v-for="crumb in breadcrumbs" :key="crumb.path">
                   <span class="k-media-hub-breadcrumb-sep">/</span>
@@ -586,22 +599,34 @@ window.panel.plugin('kirbycode/media-hub', {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
                   New Folder
                 </button>
-                <button
-                  :class="['k-media-hub-btn', { 'k-media-hub-btn--active': showDuplicates }]"
-                  @click="showDuplicates = !showDuplicates; if(showDuplicates){ selectionMode=false; selectedFiles=[]; }"
-                  title="Find duplicate files"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  Duplicates
-                </button>
-                <button
-                  :class="['k-media-hub-btn', { 'k-media-hub-btn--active': selectionMode }]"
-                  @click="toggleSelectionMode"
-                  title="Toggle selection mode"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><polyline points="9 5 11 7 15 3"/></svg>
-                  Select
-                </button>
+                <template v-if="isPro">
+                  <button
+                    :class="['k-media-hub-btn', { 'k-media-hub-btn--active': showDuplicates }]"
+                    @click="showDuplicates = !showDuplicates; if(showDuplicates){ selectionMode=false; selectedFiles=[]; }"
+                    title="Find duplicate files"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Duplicates
+                  </button>
+                  <button
+                    :class="['k-media-hub-btn', { 'k-media-hub-btn--active': selectionMode }]"
+                    @click="toggleSelectionMode"
+                    title="Toggle selection mode"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><polyline points="9 5 11 7 15 3"/></svg>
+                    Select
+                  </button>
+                </template>
+                <template v-else>
+                  <a :href="panelUrl + '/media-hub/license'" class="k-media-hub-btn k-media-hub-btn--locked" title="Duplicate Detection — requires Pro Smart">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Duplicates
+                  </a>
+                  <a :href="panelUrl + '/media-hub/license'" class="k-media-hub-btn k-media-hub-btn--locked" title="Bulk Operations — requires Pro Smart">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Select
+                  </a>
+                </template>
               </div>
               <button class="k-media-hub-btn k-media-hub-btn--primary" @click="triggerUpload">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
@@ -616,18 +641,24 @@ window.panel.plugin('kirbycode/media-hub', {
 
           <!-- New folder form -->
           <div v-if="showNewFolder" class="k-media-hub-new-folder">
-            <small v-if="parentForNewFolder" class="k-media-hub-new-folder-hint">Subfolder in: {{ parentForNewFolder }}</small>
-            <input
-              v-model="newFolderName"
-              type="text"
-              placeholder="Folder name…"
-              class="k-media-hub-input"
-              @keyup.enter="createFolder"
-              @keyup.escape="showNewFolder = false"
-              autofocus
-            />
-            <button class="k-media-hub-btn k-media-hub-btn--primary" @click="createFolder">Create</button>
-            <button class="k-media-hub-btn" @click="showNewFolder = false">Cancel</button>
+            <template v-if="parentForNewFolder && !isPro">
+              <k-media-hub-upgrade feature="2-level Subfolders" />
+              <button class="k-media-hub-btn" @click="showNewFolder = false; newFolderName = ''">Cancel</button>
+            </template>
+            <template v-else>
+              <small v-if="parentForNewFolder" class="k-media-hub-new-folder-hint">Subfolder in: {{ parentForNewFolder }}</small>
+              <input
+                v-model="newFolderName"
+                type="text"
+                placeholder="Folder name…"
+                class="k-media-hub-input"
+                @keyup.enter="createFolder"
+                @keyup.escape="showNewFolder = false"
+                autofocus
+              />
+              <button class="k-media-hub-btn k-media-hub-btn--primary" @click="createFolder">Create</button>
+              <button class="k-media-hub-btn" @click="showNewFolder = false">Cancel</button>
+            </template>
           </div>
 
           <div class="k-media-hub-layout">
@@ -698,30 +729,34 @@ window.panel.plugin('kirbycode/media-hub', {
               </ul>
 
               <!-- Tags filter -->
-              <div v-if="availableTags.length" class="k-media-hub-sidebar-section">
+              <div class="k-media-hub-sidebar-section">
                 <div class="k-media-hub-sidebar-label">Tags</div>
-                <div class="k-media-hub-tag-list">
-                  <div
-                    v-for="t in availableTags"
-                    :key="t.tag"
-                    :class="['k-media-hub-tag-btn', { active: activeTag === t.tag }]"
-                    @click="setTag(t.tag)"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                    <span class="k-media-hub-folder-name">{{ t.tag }}</span>
-                    <span class="k-media-hub-tag-count">{{ t.count }}</span>
-                    <button
-                      type="button"
-                      class="k-media-hub-tag-delete"
-                      title="Delete tag"
-                      @click.stop="deleteTag(t.tag)"
-                    >×</button>
+                <template v-if="isPro">
+                  <div v-if="availableTags.length" class="k-media-hub-tag-list">
+                    <div
+                      v-for="t in availableTags"
+                      :key="t.tag"
+                      :class="['k-media-hub-tag-btn', { active: activeTag === t.tag }]"
+                      @click="setTag(t.tag)"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                      <span class="k-media-hub-folder-name">{{ t.tag }}</span>
+                      <span class="k-media-hub-tag-count">{{ t.count }}</span>
+                      <button
+                        type="button"
+                        class="k-media-hub-tag-delete"
+                        title="Delete tag globally"
+                        @click.stop="deleteTag(t.tag)"
+                      >×</button>
+                    </div>
                   </div>
-                </div>
+                  <p v-else class="k-media-hub-sidebar-empty">No tags yet.</p>
+                </template>
+                <k-media-hub-upgrade v-else feature="Tags & Tag Cloud" :compact="true" />
               </div>
 
-              <!-- Smart Filter -->
-              <div class="k-media-hub-sidebar-section">
+              <!-- Smart Filter (Pro) -->
+              <div v-if="isPro" class="k-media-hub-sidebar-section">
                 <div class="k-media-hub-sf-header" @click="smartFilterOpen = !smartFilterOpen">
                   <span class="k-media-hub-sidebar-label k-media-hub-sf-label">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -776,6 +811,10 @@ window.panel.plugin('kirbycode/media-hub', {
                     Clear {{ activeSmartFilterCount }} filter{{ activeSmartFilterCount > 1 ? 's' : '' }}
                   </button>
                 </div>
+              </div>
+              <div v-if="!isPro" class="k-media-hub-sidebar-section">
+                <div class="k-media-hub-sidebar-label">Smart Filters</div>
+                <k-media-hub-upgrade feature="Smart Filters" :compact="true" />
               </div>
             </nav>
 
@@ -997,6 +1036,7 @@ window.panel.plugin('kirbycode/media-hub', {
             :file="activeFile"
             :api-url="apiUrl"
             :all-tags="allTagNames"
+            :is-pro="isPro"
             @close="closeDetail"
             @updated="onFileUpdated"
             @deleted="onFileDeleted"
@@ -1125,9 +1165,10 @@ window.panel.plugin('kirbycode/media-hub', {
     // ── File detail side panel ─────────────────────────────────────────────
     'k-media-hub-file-detail': {
       props: {
-        file:    { type: Object, required: true },
-        apiUrl:  { type: String, required: true },
-        allTags: { type: Array,  default: () => [] },
+        file:    { type: Object,  required: true },
+        apiUrl:  { type: String,  required: true },
+        allTags: { type: Array,   default: () => [] },
+        isPro:   { type: Boolean, default: false },
       },
       emits: ['close', 'updated', 'deleted', 'optimized'],
 
@@ -1383,20 +1424,23 @@ window.panel.plugin('kirbycode/media-hub', {
             </div>
           </div>
 
-          <!-- Media Optimization (images only, not SVG/GIF) -->
+          <!-- Media Optimization (images only, not SVG/GIF) — Pro feature -->
           <div v-if="file.type === 'image' && !['svg','gif'].includes(file.extension)" class="k-media-hub-optimize-section">
             <div class="k-media-hub-detail-section-heading">Optimization</div>
-            <div class="k-media-hub-optimize-badges">
-              <span v-if="['jpg','jpeg','png'].includes(file.extension)" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">→ WebP</span>
-              <span v-if="file.extension === 'webp'" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">WebP ✓</span>
-              <span class="k-media-hub-opt-badge">Compress</span>
-            </div>
-            <button
-              type="button"
-              class="k-media-hub-btn k-media-hub-btn--outlined k-media-hub-btn--full"
-              :disabled="optimizing"
-              @click="optimizeFile"
-            >{{ optimizing ? 'Optimizing…' : 'Re-optimize' }}</button>
+            <template v-if="isPro">
+              <div class="k-media-hub-optimize-badges">
+                <span v-if="['jpg','jpeg','png'].includes(file.extension)" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">→ WebP</span>
+                <span v-if="file.extension === 'webp'" class="k-media-hub-opt-badge k-media-hub-opt-badge--webp">WebP ✓</span>
+                <span class="k-media-hub-opt-badge">Compress</span>
+              </div>
+              <button
+                type="button"
+                class="k-media-hub-btn k-media-hub-btn--outlined k-media-hub-btn--full"
+                :disabled="optimizing"
+                @click="optimizeFile"
+              >{{ optimizing ? 'Optimizing…' : 'Re-optimize' }}</button>
+            </template>
+            <k-media-hub-upgrade v-else feature="Image Optimization" />
           </div>
 
           <div class="k-media-hub-detail-danger-section">
@@ -1407,6 +1451,20 @@ window.panel.plugin('kirbycode/media-hub', {
                 :disabled="deleting"
                 @click="deleteFile"
               >{{ deleting ? 'Deleting…' : 'Delete File' }}</button>
+            </div>
+          </div>
+
+          <!-- Upgrade CTA — shown for Free users at bottom of panel -->
+          <div v-if="!isPro" class="k-media-hub-detail-upgrade">
+            <div class="k-media-hub-detail-upgrade-inner">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <div class="k-media-hub-detail-upgrade-text">
+                <strong>Unlock Pro Smart</strong>
+                <span>Tags · Smart filters · Bulk ops · WebP · Duplicates</span>
+              </div>
+              <a href="https://www.kirbycode.com/kirby-media-hub" target="_blank" class="k-media-hub-btn k-media-hub-btn--primary k-media-hub-btn--sm">
+                €40 →
+              </a>
             </div>
           </div>
         </div>
@@ -1893,6 +1951,190 @@ window.panel.plugin('kirbycode/media-hub', {
           </div>
 
           <p v-if="help" class="k-mediahubpicker-help">{{ help }}</p>
+        </div>
+      `,
+    },
+
+    // ── License status page ────────────────────────────────────────────────
+    'k-media-hub-license-view': {
+      props: {
+        apiUrl: { type: String, required: true },
+        status: { type: Object, required: true },
+      },
+
+      data() {
+        return {
+          current:    { ...this.status },
+          rechecking: false,
+        };
+      },
+
+      computed: {
+        panelUrl() {
+          const path = window.location.pathname;
+          const idx  = path.indexOf('/media-hub');
+          return idx > -1 ? path.substring(0, idx) : '/panel';
+        },
+        hubUrl()  { return this.panelUrl + '/media-hub'; },
+        fmtDate() {
+          return (ts) => ts ? new Date(ts * 1000).toLocaleString() : null;
+        },
+        nextCheckDate() {
+          if (!this.current.cachedAt) return null;
+          return new Date((this.current.cachedAt + 7 * 24 * 3600) * 1000).toLocaleString();
+        },
+        proFeatures() {
+          return [
+            { label: '2-level subfolders',            pro: true  },
+            { label: 'Tags & tag cloud',              pro: true  },
+            { label: 'Delete tag globally',           pro: true  },
+            { label: 'Smart filters (date/user/size)',pro: true  },
+            { label: 'Bulk delete / move / rename / tag', pro: true },
+            { label: 'Duplicate detection',           pro: true  },
+            { label: 'Auto WebP conversion on upload',pro: true  },
+            { label: 'In-place image compression',    pro: true  },
+            { label: 'Re-optimize button',            pro: true  },
+            { label: 'Upload progress indicator',     pro: true  },
+          ];
+        },
+      },
+
+      methods: {
+        async recheck() {
+          this.rechecking = true;
+          try {
+            this.current = await this.$panel.api.post('media-hub/license/recheck', {});
+            const msg = this.current.isPro
+              ? 'License verified — Pro Smart is active!'
+              : this.current.hasKey
+                ? 'License key not recognized. Check the key and try again.'
+                : 'No license key configured.';
+            this.current.isPro
+              ? this.$panel.notification.success(msg)
+              : this.$panel.notification.error(msg);
+          } catch (e) {
+            this.$panel.notification.error('Recheck failed: ' + (e.message || e));
+          } finally {
+            this.rechecking = false;
+          }
+        },
+      },
+
+      template: `
+        <div class="k-media-hub-view k-media-hub-license-page">
+
+          <!-- Topbar -->
+          <div class="k-media-hub-topbar">
+            <div class="k-media-hub-breadcrumb">
+              <a :href="panelUrl" title="Back to Panel">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Panel
+              </a>
+              <span class="k-media-hub-breadcrumb-sep">/</span>
+              <a :href="hubUrl" class="k-media-hub-breadcrumb-link">Media Hub</a>
+              <span class="k-media-hub-breadcrumb-sep">/</span>
+              <span class="k-media-hub-breadcrumb-current">License</span>
+            </div>
+          </div>
+
+          <div class="k-media-hub-license-body">
+
+            <!-- Status card -->
+            <div class="k-media-hub-license-card">
+              <div class="k-media-hub-license-status-row">
+                <span :class="['k-media-hub-license-dot', current.isPro ? 'is-active' : 'is-inactive']"></span>
+                <strong class="k-media-hub-license-status-label">
+                  {{ current.isPro ? 'Pro Smart — Active' : current.hasKey ? 'Key not valid' : 'Free Version' }}
+                </strong>
+              </div>
+
+              <div v-if="current.maskedKey" class="k-media-hub-license-key">{{ current.maskedKey }}</div>
+
+              <div class="k-media-hub-license-meta-rows">
+                <div v-if="fmtDate(current.cachedAt)" class="k-media-hub-license-meta-row">
+                  <span>Last validated</span>
+                  <span>{{ fmtDate(current.cachedAt) }}</span>
+                </div>
+                <div v-if="current.isPro && nextCheckDate" class="k-media-hub-license-meta-row">
+                  <span>Next re-check</span>
+                  <span>{{ nextCheckDate }}</span>
+                </div>
+                <div v-if="current.graceUntil && !current.cacheValid" class="k-media-hub-license-meta-row k-media-hub-license-grace">
+                  <span>Grace period until</span>
+                  <span>{{ fmtDate(current.graceUntil) }}</span>
+                </div>
+              </div>
+
+              <div class="k-media-hub-license-actions">
+                <button
+                  class="k-media-hub-btn k-media-hub-btn--primary"
+                  :disabled="rechecking"
+                  @click="recheck"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  {{ rechecking ? 'Checking…' : 'Re-check License Now' }}
+                </button>
+                <a
+                  v-if="!current.isPro"
+                  href="https://www.kirbycode.com/kirby-media-hub"
+                  target="_blank"
+                  class="k-media-hub-btn"
+                >
+                  Get Pro Smart — €40 →
+                </a>
+              </div>
+            </div>
+
+            <!-- Setup instructions (when no key) -->
+            <div v-if="!current.hasKey" class="k-media-hub-license-instructions">
+              <h3>How to activate Pro Smart</h3>
+              <ol>
+                <li>Purchase your license at <a href="https://www.kirbycode.com/kirby-media-hub" target="_blank">kirbycode.com/kirby-media-hub</a>.</li>
+                <li>Add the key to your site's <code>config/config.php</code>:</li>
+              </ol>
+              <pre class="k-media-hub-license-code">'kirbycode.media-hub.license' => 'MHPRO-XXXX-XXXX-XXXX-XXXX',</pre>
+              <p>Then click <strong>Re-check License Now</strong> above to verify instantly.</p>
+            </div>
+
+            <!-- Pro features checklist -->
+            <div class="k-media-hub-license-features">
+              <h3>{{ current.isPro ? 'Your Pro Smart features' : 'What you get with Pro Smart' }}</h3>
+              <ul class="k-media-hub-license-feature-list">
+                <li v-for="f in proFeatures" :key="f.label" :class="current.isPro ? 'is-active' : 'is-locked'">
+                  <svg v-if="current.isPro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  {{ f.label }}
+                </li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
+      `,
+    },
+
+    // ── Pro upgrade notice ─────────────────────────────────────────────────
+    'k-media-hub-upgrade': {
+      props: {
+        feature: { type: String, required: true },
+        compact: { type: Boolean, default: false },
+      },
+      template: `
+        <div v-if="compact" class="k-media-hub-upgrade-compact">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <span>{{ feature }}</span>
+          <a href="https://www.kirbycode.com/kirby-media-hub" target="_blank">Pro →</a>
+        </div>
+        <div v-else class="k-media-hub-upgrade-notice">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <strong>{{ feature }}</strong> requires
+          <a href="https://www.kirbycode.com/kirby-media-hub" target="_blank">Media Hub Pro →</a>
         </div>
       `,
     },

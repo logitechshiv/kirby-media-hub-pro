@@ -4,8 +4,14 @@ use Kirby\Cms\App;
 
 require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
 require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
+require_once __DIR__ . '/src/Licensing/LicenseManager.php';
 
 App::plugin('kirbycode/media-hub', [
+
+    // ── License cache driver ────────────────────────────────────────────────
+    'cache' => [
+        'kirbycode-media-hub-license' => true,
+    ],
 
     // ── Panel area ──────────────────────────────────────────────────────────
     'areas' => [
@@ -62,6 +68,24 @@ App::plugin('kirbycode/media-hub', [
                                     'currentFolder' => null,
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug,
+                                    'isPro'         => \Kirbycode\MediaHub\LicenseManager::isPro(),
+                                ],
+                            ];
+                        },
+                    ],
+
+                    // License status view
+                    [
+                        'pattern' => 'media-hub/license',
+                        'action'  => function () use ($slug) {
+                            $kirby  = App::instance();
+                            $apiUrl = $kirby->url('api') . '/media-hub';
+                            return [
+                                'component' => 'k-media-hub-license-view',
+                                'title'     => 'Media Hub — License',
+                                'props'     => [
+                                    'apiUrl' => $apiUrl,
+                                    'status' => \Kirbycode\MediaHub\LicenseManager::getStatus(),
                                 ],
                             ];
                         },
@@ -109,6 +133,7 @@ App::plugin('kirbycode/media-hub', [
                                     'currentFolder' => $folderSlug,
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug . '+' . $folderSlug,
+                                    'isPro'         => \Kirbycode\MediaHub\LicenseManager::isPro(),
                                 ],
                             ];
                         },
@@ -162,11 +187,13 @@ App::plugin('kirbycode/media-hub', [
                 // non-critical — don't break the upload if this fails
             }
 
-            // Convert to WebP and compress (sidecar copy preserves UUID + metadata)
-            try {
-                \Kirbycode\MediaHub\MediaOptimizer::optimizeOnUpload($file);
-            } catch (\Throwable $e) {
-                // non-critical — never break the upload
+            // Convert to WebP and compress — V2 Pro feature
+            if (\Kirbycode\MediaHub\LicenseManager::isPro()) {
+                try {
+                    \Kirbycode\MediaHub\MediaOptimizer::optimizeOnUpload($file);
+                } catch (\Throwable $e) {
+                    // non-critical — never break the upload
+                }
             }
         },
     ],
