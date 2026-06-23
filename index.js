@@ -208,11 +208,13 @@ window.panel.plugin('kirbycode/media-hub', {
           if (!confirm(`Remove tag "${tag}" from all files? Files will not be deleted.`)) return;
           try {
             await this.$panel.api.delete('media-hub/tags/' + encodeURIComponent(tag));
-            if (this.activeTag === tag) {
-              this.activeTag = '';
-              this.loadFiles();
-            }
+            if (this.activeTag === tag) this.activeTag = '';
+            await this.loadFiles();
             await this.loadTags();
+            if (this.activeFile) {
+              const updated = this.files.find(f => f.id === this.activeFile.id);
+              if (updated) this.activeFile = updated;
+            }
             this.$panel.notification.success(`Tag "${tag}" removed from all files.`);
           } catch (e) {
             this.$panel.notification.error('Could not delete tag.');
