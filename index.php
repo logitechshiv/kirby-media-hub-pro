@@ -69,6 +69,7 @@ App::plugin('kirbycode/media-hub', [
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug,
                                     'isPro'         => \Kirbycode\MediaHub\LicenseManager::isPro(),
+                                    'isAdmin'       => $kirby->user() ? $kirby->user()->isAdmin() : false,
                                 ],
                             ];
                         },
@@ -134,6 +135,7 @@ App::plugin('kirbycode/media-hub', [
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug . '+' . $folderSlug,
                                     'isPro'         => \Kirbycode\MediaHub\LicenseManager::isPro(),
+                                    'isAdmin'       => $kirby->user() ? $kirby->user()->isAdmin() : false,
                                 ],
                             ];
                         },

@@ -14,6 +14,7 @@ window.panel.plugin('kirbycode/media-hub', {
         apiUrl:        { type: String,  required: true },
         uploadApiBase: { type: String,  required: true },
         isPro:         { type: Boolean, default: false },
+        isAdmin:       { type: Boolean, default: false },
       },
 
       data() {
@@ -217,7 +218,10 @@ window.panel.plugin('kirbycode/media-hub', {
             }
             this.$panel.notification.success(`Tag "${tag}" removed from all files.`);
           } catch (e) {
-            this.$panel.notification.error('Could not delete tag.');
+            const msg = e.status === 403 || e.code === 403
+              ? 'Only administrators can delete tags.'
+              : 'Could not delete tag.';
+            this.$panel.notification.error(msg);
           }
         },
 
@@ -305,7 +309,10 @@ window.panel.plugin('kirbycode/media-hub', {
             }
             this.$panel.notification.success('Folder deleted');
           } catch (e) {
-            this.$panel.notification.error('Could not delete folder: ' + (e.message || e));
+            const msg = e.status === 403 || e.code === 403
+              ? 'Only administrators can delete folders.'
+              : 'Could not delete folder: ' + (e.message || e);
+            this.$panel.notification.error(msg);
           }
         },
 
@@ -434,7 +441,10 @@ window.panel.plugin('kirbycode/media-hub', {
             this.loadFiles(); this.loadFolders(); this.loadTags(); this.loadUploaders();
             this.statsRefreshKey++;
           } catch (e) {
-            this.$panel.notification.error('Bulk delete failed: ' + (e.message || e));
+            const msg = e.status === 403 || e.code === 403
+              ? 'Only administrators can delete files.'
+              : 'Bulk delete failed: ' + (e.message || e);
+            this.$panel.notification.error(msg);
           }
         },
 
@@ -702,6 +712,7 @@ window.panel.plugin('kirbycode/media-hub', {
                     <span class="k-media-hub-folder-name">{{ folder.title }}</span>
                     <span class="k-media-hub-folder-count">{{ folder.fileCount }}</span>
                     <button
+                      v-if="isAdmin"
                       class="k-media-hub-folder-delete"
                       @click.stop="deleteFolder(folder)"
                       title="Delete folder"
@@ -721,6 +732,7 @@ window.panel.plugin('kirbycode/media-hub', {
                       <span class="k-media-hub-folder-name">{{ sub.title }}</span>
                       <span class="k-media-hub-folder-count">{{ sub.fileCount }}</span>
                       <button
+                        v-if="isAdmin"
                         class="k-media-hub-folder-delete"
                         @click.stop="deleteFolder(sub)"
                         title="Delete folder"
@@ -745,6 +757,7 @@ window.panel.plugin('kirbycode/media-hub', {
                       <span class="k-media-hub-folder-name">{{ t.tag }}</span>
                       <span class="k-media-hub-tag-count">{{ t.count }}</span>
                       <button
+                        v-if="isAdmin"
                         type="button"
                         class="k-media-hub-tag-delete"
                         title="Delete tag globally"
@@ -870,7 +883,7 @@ window.panel.plugin('kirbycode/media-hub', {
                   </button>
                 </div>
                 <div v-if="selectedFiles.length" class="k-media-hub-bulk-actions">
-                  <button type="button" class="k-media-hub-btn k-media-hub-btn--danger-outline" @click="doBulkDelete">
+                  <button v-if="isAdmin" type="button" class="k-media-hub-btn k-media-hub-btn--danger-outline" @click="doBulkDelete">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     Delete
                   </button>

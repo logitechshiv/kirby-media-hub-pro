@@ -16,6 +16,30 @@ function mediaHubRequirePro(): ?\Kirby\Http\Response
     return null;
 }
 
+function mediaHubRequireAdmin(): ?\Kirby\Http\Response
+{
+    $user = \Kirby\Cms\App::instance()->user();
+    if (!$user || $user->role()->id() !== 'admin') {
+        return \Kirby\Http\Response::json([
+            'status'  => 'error',
+            'message' => 'Admin access required',
+        ], 403);
+    }
+    return null;
+}
+
+function mediaHubValidatePath(string $path, string $root): bool
+{
+    if ($path === '') return true; // empty = root, always valid
+    if (preg_match('#(^|/)\.\.(/|$)#', $path)) return false;
+    if (str_contains($path, "\0")) return false;
+
+    $page = \Kirby\Cms\App::instance()->page($root . '/' . $path);
+    if (!$page) return false;
+
+    return str_starts_with($page->id(), $root . '/');
+}
+
 /**
  * Serialize a Kirby File to an array for API responses.
  */
@@ -121,6 +145,9 @@ return [
 
             if ($folder) {
                 // Specific folder only
+                if (!mediaHubValidatePath($folder, $slug)) {
+                    return ['data' => [], 'pagination' => ['total' => 0, 'page' => 1, 'limit' => $limit]];
+                }
                 $folderPage = $kirby->page($slug . '/' . $folder);
                 if ($folderPage) {
                     foreach ($folderPage->files() as $f) {
@@ -429,9 +456,15 @@ return [
         'method'  => 'DELETE',
         'auth'    => true,
         'action'  => function (string $encodedPath) {
+            if ($guard = mediaHubRequireAdmin()) return $guard;
             $kirby  = App::instance();
             $slug   = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $path   = str_replace('+', '/', rawurldecode($encodedPath));
+
+            if (!mediaHubValidatePath($path, $slug)) {
+                return ['status' => 'error', 'message' => 'Invalid folder path'];
+            }
+
             $folder = $kirby->page($slug . '/' . $path);
 
             if (!$folder) {
@@ -462,6 +495,7 @@ return [
             $seen   = [];
 
             foreach ($kirby->site()->index() as $p) {
+                if (!$p->isReadable()) continue;
                 if (isset($seen[$p->id()])) {
                     continue;
                 }
@@ -616,6 +650,9 @@ return [
             // Collect files — specific folder or all
             $allFiles = [];
             if ($folder) {
+                if (!mediaHubValidatePath($folder, $slug)) {
+                    return ['data' => [], 'pagination' => ['total' => 0, 'page' => 1, 'limit' => 30], 'folderTree' => [], 'tags' => []];
+                }
                 $folderPage = $kirby->page($slug . '/' . $folder);
                 if ($folderPage) {
                     foreach ($folderPage->files() as $f) {
@@ -800,6 +837,7 @@ return [
         'auth'    => true,
         'action'  => function (string $encodedTag) {
             if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = mediaHubRequireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -842,6 +880,7 @@ return [
         'auth'    => true,
         'action'  => function () {
             if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = mediaHubRequireAdmin()) return $guard;
             $kirby   = App::instance();
             $ids     = (array) $kirby->request()->get('ids', []);
             $deleted = 0;
@@ -874,6 +913,10 @@ return [
             $slug         = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids          = (array) $kirby->request()->get('ids', []);
             $targetFolder = trim((string) $kirby->request()->get('targetFolder', ''));
+
+            if ($targetFolder !== '' && !mediaHubValidatePath($targetFolder, $slug)) {
+                return ['status' => 'error', 'message' => 'Invalid target folder path'];
+            }
 
             $target = $targetFolder !== ''
                 ? $kirby->page($slug . '/' . $targetFolder)
