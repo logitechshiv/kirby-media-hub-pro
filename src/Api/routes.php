@@ -41,6 +41,22 @@ function mediaHubValidatePath(string $path, string $root): bool
 }
 
 /**
+ * Load a file by ID and verify it lives within the Media Hub directory.
+ * Returns the File on success, or a 404/403 JSON Response on failure.
+ */
+function mediaHubLoadScopedFile(string $id, string $slug): \Kirby\Cms\File|\Kirby\Http\Response
+{
+    $file = \Kirby\Cms\App::instance()->file($id);
+    if (!$file) {
+        return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'File not found'], 404);
+    }
+    if (!str_starts_with($file->parent()->id(), $slug)) {
+        return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'Access denied'], 403);
+    }
+    return $file;
+}
+
+/**
  * Serialize a Kirby File to an array for API responses.
  */
 function mediaHubSerializeFile(File $file, bool $detailed = false): array
@@ -252,12 +268,10 @@ return [
         'auth'    => true,
         'action'  => function (string $encodedId) {
             $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = $kirby->file($id);
-
-            if (!$file) {
-                return ['status' => 'error', 'message' => 'File not found'];
-            }
+            $file  = mediaHubLoadScopedFile($id, $slug);
+            if ($file instanceof \Kirby\Http\Response) return $file;
 
             return mediaHubSerializeFile($file, true);
         },
@@ -270,12 +284,10 @@ return [
         'auth'    => true,
         'action'  => function (string $encodedId) {
             $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = $kirby->file($id);
-
-            if (!$file) {
-                return ['status' => 'error', 'message' => 'File not found'];
-            }
+            $file  = mediaHubLoadScopedFile($id, $slug);
+            if ($file instanceof \Kirby\Http\Response) return $file;
 
             $body    = $kirby->request()->body()->toArray();
             $allowed = ['title', 'alt', 'description', 'copyright', 'photographer', 'tags'];
@@ -304,14 +316,16 @@ return [
         'auth'    => true,
         'action'  => function (string $encodedId) {
             $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = $kirby->file($id);
+            $file  = mediaHubLoadScopedFile($id, $slug);
+            if ($file instanceof \Kirby\Http\Response) return $file;
 
-            if (!$file) {
-                return ['status' => 'error', 'message' => 'File not found'];
+            try {
+                $file->delete();
+            } catch (\Throwable $e) {
+                return \Kirby\Http\Response::json(['status' => 'error', 'message' => $e->getMessage()], 500);
             }
-
-            $file->delete();
 
             return ['status' => 'ok'];
         },
@@ -327,12 +341,10 @@ return [
             require_once dirname(__DIR__) . '/Optimization/MediaOptimizer.php';
 
             $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = $kirby->file($id);
-
-            if (!$file) {
-                return ['status' => 'error', 'message' => 'File not found'];
-            }
+            $file  = mediaHubLoadScopedFile($id, $slug);
+            if ($file instanceof \Kirby\Http\Response) return $file;
 
             $result = \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimize($file);
 
@@ -882,14 +894,15 @@ return [
             if ($guard = mediaHubRequirePro()) return $guard;
             if ($guard = mediaHubRequireAdmin()) return $guard;
             $kirby   = App::instance();
+            $slug    = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids     = (array) $kirby->request()->get('ids', []);
             $deleted = 0;
             $errors  = [];
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = $kirby->file($id);
-                if (!$file) { $errors[] = basename($id) . ' not found'; continue; }
+                $file = mediaHubLoadScopedFile($id, $slug);
+                if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
                 try {
                     $file->delete();
                     $deleted++;
@@ -931,8 +944,8 @@ return [
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = $kirby->file($id);
-                if (!$file) { $errors[] = basename($id) . ' not found'; continue; }
+                $file = mediaHubLoadScopedFile($id, $slug);
+                if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
                 if ($file->parent()->id() === $target->id()) { $moved++; continue; }
 
                 try {
@@ -968,6 +981,7 @@ return [
         'action'  => function () {
             if ($guard = mediaHubRequirePro()) return $guard;
             $kirby   = App::instance();
+            $slug    = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids     = (array) $kirby->request()->get('ids', []);
             $pattern = trim((string) $kirby->request()->get('pattern', ''));
             $startAt = max(1, (int) $kirby->request()->get('startAt', 1));
@@ -982,8 +996,8 @@ return [
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = $kirby->file($id);
-                if (!$file) { $errors[] = basename($id) . ' not found'; $i++; continue; }
+                $file = mediaHubLoadScopedFile($id, $slug);
+                if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; $i++; continue; }
 
                 $newSlug = Str::slug(str_replace('{n}', $i, $pattern));
                 if ($newSlug === '') { $errors[] = $file->filename() . ': empty slug'; $i++; continue; }
@@ -1011,6 +1025,7 @@ return [
         'action'  => function () {
             if ($guard = mediaHubRequirePro()) return $guard;
             $kirby  = App::instance();
+            $slug   = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids    = (array) $kirby->request()->get('ids', []);
             $tags   = array_values(array_filter(array_map('trim', (array) $kirby->request()->get('tags', []))));
             $action = trim((string) $kirby->request()->get('action', 'add')); // add | remove | set
@@ -1020,8 +1035,8 @@ return [
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = $kirby->file($id);
-                if (!$file) { $errors[] = basename($id) . ' not found'; continue; }
+                $file = mediaHubLoadScopedFile($id, $slug);
+                if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
 
                 $raw      = (string) $file->content()->get('tags')->value();
                 $existing = $raw !== '' ? array_map('trim', explode(',', $raw)) : [];
@@ -1055,6 +1070,7 @@ return [
         'auth'    => true,
         'action'  => function () {
             if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = mediaHubRequireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -1068,6 +1084,16 @@ return [
             foreach ($root->files() as $f)  $allFiles[] = $f;
             foreach ($root->index() as $child) {
                 foreach ($child->files() as $f) $allFiles[] = $f;
+            }
+
+            // Reject oversized libraries to prevent memory exhaustion / timeout DoS
+            $limit = 500;
+            if (count($allFiles) > $limit) {
+                return \Kirby\Http\Response::json([
+                    'status'   => 'error',
+                    'message'  => 'Library too large for duplicate scan (' . count($allFiles) . ' files). Maximum is ' . $limit . '.',
+                    'tooLarge' => true,
+                ], 422);
             }
 
             // Compute MD5 hashes once (reused for both exact + similar checks)

@@ -1506,6 +1506,7 @@ window.panel.plugin('kirbycode/media-hub', {
       data() {
         return {
           loading:  true,
+          tooLarge: false,
           exact:    [],
           similar:  [],
           stats:    {},
@@ -1519,14 +1520,19 @@ window.panel.plugin('kirbycode/media-hub', {
 
       methods: {
         async scan() {
-          this.loading = true;
+          this.loading  = true;
+          this.tooLarge = false;
           try {
             const res    = await this.$panel.api.get('media-hub/duplicates');
             this.exact   = res.exact   || [];
             this.similar = res.similar || [];
             this.stats   = res.stats   || {};
           } catch (e) {
-            this.$panel.notification.error('Scan failed: ' + (e.message || e));
+            if (e.status === 422 && e.tooLarge) {
+              this.tooLarge = true;
+            } else {
+              this.$panel.notification.error('Scan failed: ' + (e.message || e));
+            }
           } finally {
             this.loading = false;
           }
@@ -1608,6 +1614,12 @@ window.panel.plugin('kirbycode/media-hub', {
           <div v-if="loading" class="k-media-hub-dupes-scanning">
             <div class="k-media-hub-spinner"></div>
             <span>Scanning for duplicates…</span>
+          </div>
+
+          <!-- Library too large -->
+          <div v-else-if="tooLarge" class="k-media-hub-dupes-clean">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p>Library is too large to scan (max 500 files). Consider organising files into folders and scanning in batches.</p>
           </div>
 
           <!-- All clean -->
