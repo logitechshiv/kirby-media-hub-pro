@@ -2,9 +2,11 @@
 
 use Kirby\Cms\App;
 
-require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
-require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
-require_once __DIR__ . '/src/Licensing/LicenseManager.php';
+if (!class_exists(\Kirbycode\MediaHub\LicenseManager::class)) {
+    require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
+    require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
+    require_once __DIR__ . '/src/Licensing/LicenseManager.php';
+}
 
 App::plugin('kirbycode/media-hub', [
 
