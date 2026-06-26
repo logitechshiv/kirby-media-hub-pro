@@ -241,7 +241,8 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT — [Shivlal Sheladiya](https://kirbycode.com)
+Proprietary — [Shivlal Sheladiya](https://kirbycode.com). All rights reserved.
+A valid license is required. Purchase at [kirbycode.com](https://kirbycode.com).
 
 ---
 

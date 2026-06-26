@@ -2,7 +2,7 @@
   "name": "kirbycode/media-hub-pro",
   "description": "Centralized media library for Kirby CMS 5 — folders, tags, smart filters, bulk operations, duplicate detection, and a custom picker field.",
   "type": "kirby-plugin",
-  "license": "MIT",
+  "license": "proprietary",
   "authors": [
     {
       "name": "Shivlal Sheladiya",
