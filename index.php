@@ -2,7 +2,7 @@
 
 use Kirby\Cms\App;
 
-if (!class_exists(\Kirbycode\MediaHub\LicenseManager::class)) {
+if (!class_exists(\Kirbycode\MediaHub\Licensing\LicenseManager::class)) {
     require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
     require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
     require_once __DIR__ . '/src/Licensing/LicenseManager.php';
@@ -70,7 +70,7 @@ App::plugin('kirbycode/media-hub', [
                                     'currentFolder' => null,
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug,
-                                    'isPro'         => \Kirbycode\MediaHub\LicenseManager::isPro(),
+                                    'isPro'         => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
                                     'isAdmin'       => $kirby->user() ? $kirby->user()->isAdmin() : false,
                                 ],
                             ];
@@ -88,7 +88,7 @@ App::plugin('kirbycode/media-hub', [
                                 'title'     => 'Media Hub — License',
                                 'props'     => [
                                     'apiUrl' => $apiUrl,
-                                    'status' => \Kirbycode\MediaHub\LicenseManager::getStatus(),
+                                    'status' => \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus(),
                                 ],
                             ];
                         },
@@ -136,7 +136,7 @@ App::plugin('kirbycode/media-hub', [
                                     'currentFolder' => $folderSlug,
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug . '+' . $folderSlug,
-                                    'isPro'         => \Kirbycode\MediaHub\LicenseManager::isPro(),
+                                    'isPro'         => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
                                     'isAdmin'       => $kirby->user() ? $kirby->user()->isAdmin() : false,
                                 ],
                             ];
@@ -168,7 +168,7 @@ App::plugin('kirbycode/media-hub', [
     // ── Hooks ───────────────────────────────────────────────────────────────
     'hooks' => [
         'system.loadPlugins:after' => function () {
-            \Kirbycode\MediaHub\MediaHubSetup::ensureStructure();
+            \Kirbycode\MediaHub\Setup\MediaHubSetup::ensureStructure();
         },
 
         // Capture the uploading user whenever a file is created inside media-hub
@@ -192,9 +192,9 @@ App::plugin('kirbycode/media-hub', [
             }
 
             // Convert to WebP and compress — V2 Pro feature
-            if (\Kirbycode\MediaHub\LicenseManager::isPro()) {
+            if (\Kirbycode\MediaHub\Licensing\LicenseManager::isPro()) {
                 try {
-                    \Kirbycode\MediaHub\MediaOptimizer::optimizeOnUpload($file);
+                    \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimizeOnUpload($file);
                 } catch (\Throwable $e) {
                     // non-critical — never break the upload
                 }

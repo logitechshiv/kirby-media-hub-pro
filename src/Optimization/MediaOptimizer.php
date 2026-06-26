@@ -1,6 +1,6 @@
 <?php
 
-namespace Kirbycode\MediaHub;
+namespace Kirbycode\MediaHub\Optimization;
 
 use Kirby\Cms\App;
 use Kirby\Cms\File;

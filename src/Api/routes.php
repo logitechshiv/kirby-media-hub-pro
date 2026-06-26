@@ -6,7 +6,7 @@ use Kirby\Toolkit\Str;
 
 function mediaHubRequirePro(): ?\Kirby\Http\Response
 {
-    if (!\Kirbycode\MediaHub\LicenseManager::isPro()) {
+    if (!\Kirbycode\MediaHub\Licensing\LicenseManager::isPro()) {
         return \Kirby\Http\Response::json([
             'status'  => 'error',
             'code'    => 402,
@@ -96,7 +96,7 @@ return [
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
-            return \Kirbycode\MediaHub\LicenseManager::getStatus();
+            return \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus();
         },
     ],
 
@@ -106,8 +106,8 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
-            \Kirbycode\MediaHub\LicenseManager::bustCache();
-            return \Kirbycode\MediaHub\LicenseManager::getStatus();
+            \Kirbycode\MediaHub\Licensing\LicenseManager::bustCache();
+            return \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus();
         },
     ],
 
@@ -334,7 +334,7 @@ return [
                 return ['status' => 'error', 'message' => 'File not found'];
             }
 
-            $result = \Kirbycode\MediaHub\MediaOptimizer::optimize($file);
+            $result = \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimize($file);
 
             return ['status' => 'ok', 'data' => $result];
         },

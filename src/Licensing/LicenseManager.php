@@ -1,6 +1,6 @@
 <?php
 
-namespace Kirbycode\MediaHub;
+namespace Kirbycode\MediaHub\Licensing;
 
 use Kirby\Cms\App;
 

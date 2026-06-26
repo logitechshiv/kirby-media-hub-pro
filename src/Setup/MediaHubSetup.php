@@ -1,6 +1,6 @@
 <?php
 
-namespace Kirbycode\MediaHub;
+namespace Kirbycode\MediaHub\Setup;
 
 use Kirby\Cms\App;
 use Kirby\Filesystem\Dir;
