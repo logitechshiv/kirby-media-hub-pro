@@ -13,8 +13,10 @@ window.panel.plugin('kirbycode/media-hub', {
         currentFolder: { type: String,  default: null },
         apiUrl:        { type: String,  required: true },
         uploadApiBase: { type: String,  required: true },
-        isPro:         { type: Boolean, default: false },
-        isAdmin:       { type: Boolean, default: false },
+        isPro:           { type: Boolean, default: false },
+        isAdmin:         { type: Boolean, default: false },
+        updateAvailable: { type: Boolean, default: false },
+        latestVersion:   { type: String,  default: '' },
       },
 
       data() {
@@ -646,6 +648,14 @@ window.panel.plugin('kirbycode/media-hub', {
               </button>
               <input ref="fileInput" type="file" multiple style="display:none" @change="handleFileInput" />
             </div>
+          </div>
+
+          <!-- Update available banner -->
+          <div v-if="updateAvailable" class="k-media-hub-update-bar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Media Hub Pro <strong>v{{ latestVersion }}</strong> is available —
+            <a href="https://packagist.org/packages/kirbycode/media-hub-pro" target="_blank" rel="noopener">View changelog</a>
+            &nbsp;·&nbsp; Run <code>composer update kirbycode/media-hub-pro</code> to upgrade.
           </div>
 
           <!-- Stats bar -->
@@ -1973,8 +1983,10 @@ window.panel.plugin('kirbycode/media-hub', {
     // ── License status page ────────────────────────────────────────────────
     'k-media-hub-license-view': {
       props: {
-        apiUrl: { type: String, required: true },
-        status: { type: Object, required: true },
+        apiUrl:          { type: String,  required: true },
+        status:          { type: Object,  required: true },
+        updateAvailable: { type: Boolean, default: false },
+        latestVersion:   { type: String,  default: '' },
       },
 
       data() {
@@ -2053,6 +2065,16 @@ window.panel.plugin('kirbycode/media-hub', {
           </div>
 
           <div class="k-media-hub-license-body">
+
+            <!-- Update available notice -->
+            <div v-if="updateAvailable" class="k-media-hub-update-notice">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <div>
+                <strong>Update available — v{{ latestVersion }}</strong>
+                <p>Run <code>composer update kirbycode/media-hub-pro</code> to upgrade.</p>
+                <a href="https://packagist.org/packages/kirbycode/media-hub-pro" target="_blank" rel="noopener">View on Packagist →</a>
+              </div>
+            </div>
 
             <!-- Status card -->
             <div class="k-media-hub-license-card">

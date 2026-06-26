@@ -45,7 +45,7 @@ class LicenseManager
                 'key'     => $key,
                 'domain'  => App::instance()->request()->url()->domain(),
                 'plugin'  => 'media-hub-pro',
-                'version' => '2.0.0',
+                'version' => UpdateChecker::CURRENT_VERSION,
             ]);
             $ctx  = stream_context_create(['http' => [
                 'method'        => 'POST',

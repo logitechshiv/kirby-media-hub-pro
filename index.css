@@ -2346,3 +2346,78 @@ li.k-media-hub-folder-entry:hover {
 .k-media-hub-upgrade-notice a:hover {
   text-decoration: underline;
 }
+
+/* ── Update available banners ────────────────────────────────────────────── */
+
+.k-media-hub-update-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #fffbeb;
+  border-bottom: 1px solid #f59e0b;
+  font-size: 13px;
+  color: #92400e;
+  flex-shrink: 0;
+}
+
+.k-media-hub-update-bar svg {
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+.k-media-hub-update-bar a {
+  color: #92400e;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.k-media-hub-update-bar code {
+  background: rgba(0,0,0,0.07);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+.k-media-hub-update-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  color: #92400e;
+}
+
+.k-media-hub-update-notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #d97706;
+}
+
+.k-media-hub-update-notice strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.k-media-hub-update-notice p {
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+
+.k-media-hub-update-notice code {
+  background: rgba(0,0,0,0.07);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+.k-media-hub-update-notice a {
+  font-size: 13px;
+  color: #92400e;
+  font-weight: 600;
+  text-decoration: underline;
+}

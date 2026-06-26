@@ -6,6 +6,7 @@ if (!class_exists(\Kirbycode\MediaHub\Licensing\LicenseManager::class)) {
     require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
     require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
     require_once __DIR__ . '/src/Licensing/LicenseManager.php';
+    require_once __DIR__ . '/src/Licensing/UpdateChecker.php';
 }
 
 App::plugin('kirbycode/media-hub', [
@@ -70,8 +71,10 @@ App::plugin('kirbycode/media-hub', [
                                     'currentFolder' => null,
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug,
-                                    'isPro'         => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
-                                    'isAdmin'       => $kirby->user() ? $kirby->user()->isAdmin() : false,
+                                    'isPro'           => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
+                                    'isAdmin'         => $kirby->user() ? $kirby->user()->isAdmin() : false,
+                                    'updateAvailable' => \Kirbycode\MediaHub\Licensing\UpdateChecker::hasUpdate(),
+                                    'latestVersion'   => \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion() ?? '',
                                 ],
                             ];
                         },
@@ -87,8 +90,10 @@ App::plugin('kirbycode/media-hub', [
                                 'component' => 'k-media-hub-license-view',
                                 'title'     => 'Media Hub — License',
                                 'props'     => [
-                                    'apiUrl' => $apiUrl,
-                                    'status' => \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus(),
+                                    'apiUrl'          => $apiUrl,
+                                    'status'          => \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus(),
+                                    'updateAvailable' => \Kirbycode\MediaHub\Licensing\UpdateChecker::hasUpdate(),
+                                    'latestVersion'   => \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion() ?? '',
                                 ],
                             ];
                         },
@@ -136,8 +141,10 @@ App::plugin('kirbycode/media-hub', [
                                     'currentFolder' => $folderSlug,
                                     'apiUrl'        => $apiUrl,
                                     'uploadApiBase' => 'pages/' . $slug . '+' . $folderSlug,
-                                    'isPro'         => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
-                                    'isAdmin'       => $kirby->user() ? $kirby->user()->isAdmin() : false,
+                                    'isPro'           => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
+                                    'isAdmin'         => $kirby->user() ? $kirby->user()->isAdmin() : false,
+                                    'updateAvailable' => \Kirbycode\MediaHub\Licensing\UpdateChecker::hasUpdate(),
+                                    'latestVersion'   => \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion() ?? '',
                                 ],
                             ];
                         },
