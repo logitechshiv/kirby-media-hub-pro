@@ -3,101 +3,10 @@
 use Kirby\Cms\App;
 use Kirby\Cms\File;
 use Kirby\Toolkit\Str;
+use Kirbycode\MediaHub\Api\Helpers;
 
-function mediaHubRequirePro(): ?\Kirby\Http\Response
-{
-    if (!\Kirbycode\MediaHub\Licensing\LicenseManager::isPro()) {
-        return \Kirby\Http\Response::json([
-            'status'  => 'error',
-            'code'    => 402,
-            'message' => 'This feature requires Media Hub Pro. Get your license at kirbycode.com',
-        ], 402);
-    }
-    return null;
-}
-
-function mediaHubRequireAdmin(): ?\Kirby\Http\Response
-{
-    $user = \Kirby\Cms\App::instance()->user();
-    if (!$user || $user->role()->id() !== 'admin') {
-        return \Kirby\Http\Response::json([
-            'status'  => 'error',
-            'message' => 'Admin access required',
-        ], 403);
-    }
-    return null;
-}
-
-function mediaHubValidatePath(string $path, string $root): bool
-{
-    if ($path === '') return true; // empty = root, always valid
-    if (preg_match('#(^|/)\.\.(/|$)#', $path)) return false;
-    if (str_contains($path, "\0")) return false;
-
-    $page = \Kirby\Cms\App::instance()->page($root . '/' . $path);
-    if (!$page) return false;
-
-    return str_starts_with($page->id(), $root . '/');
-}
-
-/**
- * Load a file by ID and verify it lives within the Media Hub directory.
- * Returns the File on success, or a 404/403 JSON Response on failure.
- */
-function mediaHubLoadScopedFile(string $id, string $slug): \Kirby\Cms\File|\Kirby\Http\Response
-{
-    $file = \Kirby\Cms\App::instance()->file($id);
-    if (!$file) {
-        return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'File not found'], 404);
-    }
-    if (!str_starts_with($file->parent()->id(), $slug)) {
-        return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'Access denied'], 403);
-    }
-    return $file;
-}
-
-/**
- * Serialize a Kirby File to an array for API responses.
- */
-function mediaHubSerializeFile(File $file, bool $detailed = false): array
-{
-    $thumb = null;
-    if ($file->type() === 'image') {
-        try {
-            $thumb = $file->thumb(['width' => 400])->url();
-        } catch (\Throwable $e) {
-            $thumb = $file->url();
-        }
-    }
-
-    $tagsRaw = (string) $file->content()->get('tags')->value();
-    $data = [
-        'id'           => $file->id(),
-        'uuid'         => $file->uuid()->id(),
-        'filename'     => $file->filename(),
-        'url'          => $file->url(),
-        'thumb'        => $thumb,
-        'type'         => $file->type(),
-        'extension'    => $file->extension(),
-        'niceSize'     => $file->niceSize(),
-        'size'         => $file->size(),
-        'modified'     => $file->modified('Y-m-d'),
-        'parent'       => $file->parent()->id(),
-        'title'        => (string) $file->content()->get('title')->value(),
-        'alt'          => (string) $file->content()->get('alt')->value(),
-        'description'  => (string) $file->content()->get('description')->value(),
-        'copyright'    => (string) $file->content()->get('copyright')->value(),
-        'photographer' => (string) $file->content()->get('photographer')->value(),
-        'tags'         => $tagsRaw ? array_values(array_filter(array_map('trim', explode(',', $tagsRaw)))) : [],
-        'uploadedby'   => (string) $file->content()->get('uploadedby')->value(),
-        'uploaddate'   => (string) $file->content()->get('uploaddate')->value(),
-    ];
-
-    if ($detailed) {
-        $data['uploaddate'] = (string) $file->content()->get('uploaddate')->value();
-    }
-
-    return $data;
+if (!class_exists(Helpers::class)) {
+    require_once __DIR__ . '/Helpers.php';
 }
 
 /**
@@ -161,7 +70,7 @@ return [
 
             if ($folder) {
                 // Specific folder only
-                if (!mediaHubValidatePath($folder, $slug)) {
+                if (!Helpers::validatePath($folder, $slug)) {
                     return ['data' => [], 'pagination' => ['total' => 0, 'page' => 1, 'limit' => $limit]];
                 }
                 $folderPage = $kirby->page($slug . '/' . $folder);
@@ -247,7 +156,7 @@ return [
 
             $data = [];
             foreach ($slice as $file) {
-                $data[] = mediaHubSerializeFile($file);
+                $data[] = Helpers::serializeFile($file);
             }
 
             return [
@@ -270,10 +179,10 @@ return [
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = mediaHubLoadScopedFile($id, $slug);
+            $file  = Helpers::loadScopedFile($id, $slug);
             if ($file instanceof \Kirby\Http\Response) return $file;
 
-            return mediaHubSerializeFile($file, true);
+            return Helpers::serializeFile($file, true);
         },
     ],
 
@@ -286,7 +195,7 @@ return [
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = mediaHubLoadScopedFile($id, $slug);
+            $file  = Helpers::loadScopedFile($id, $slug);
             if ($file instanceof \Kirby\Http\Response) return $file;
 
             $body    = $kirby->request()->body()->toArray();
@@ -302,7 +211,8 @@ return [
             try {
                 $kirby->impersonate('kirby', fn() => $file->update($content));
             } catch (\Throwable $e) {
-                return \Kirby\Http\Response::json(['status' => 'error', 'message' => $e->getMessage()], 400);
+                error_log('[MediaHub] file update failed: ' . $e->getMessage());
+                return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'Operation failed.'], 400);
             }
 
             return ['status' => 'ok'];
@@ -318,13 +228,14 @@ return [
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = mediaHubLoadScopedFile($id, $slug);
+            $file  = Helpers::loadScopedFile($id, $slug);
             if ($file instanceof \Kirby\Http\Response) return $file;
 
             try {
                 $file->delete();
             } catch (\Throwable $e) {
-                return \Kirby\Http\Response::json(['status' => 'error', 'message' => $e->getMessage()], 500);
+                error_log('[MediaHub] file delete failed: ' . $e->getMessage());
+                return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'Operation failed.'], 500);
             }
 
             return ['status' => 'ok'];
@@ -337,13 +248,13 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function (string $encodedId) {
-            if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
             require_once dirname(__DIR__) . '/Optimization/MediaOptimizer.php';
 
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
-            $file  = mediaHubLoadScopedFile($id, $slug);
+            $file  = Helpers::loadScopedFile($id, $slug);
             if ($file instanceof \Kirby\Http\Response) return $file;
 
             $result = \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimize($file);
@@ -393,7 +304,7 @@ return [
         },
     ],
 
-    // ── 6. Create a folder ──────────────────────────────────────────────────
+    // ── 7. Create a folder ──────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/folders',
         'method'  => 'POST',
@@ -439,7 +350,8 @@ return [
                     return $kirby->page($slug . '/' . $fullPath);
                 });
             } catch (\Throwable $e) {
-                return ['status' => 'error', 'message' => $e->getMessage()];
+                error_log('[MediaHub] folder create failed: ' . $e->getMessage());
+                return ['status' => 'error', 'message' => 'Operation failed.'];
             }
 
             if (!$folder) {
@@ -462,18 +374,18 @@ return [
         },
     ],
 
-    // ── 7. Delete a folder ──────────────────────────────────────────────────
+    // ── 8. Delete a folder ──────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/folders/(:any)',
         'method'  => 'DELETE',
         'auth'    => true,
         'action'  => function (string $encodedPath) {
-            if ($guard = mediaHubRequireAdmin()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby  = App::instance();
             $slug   = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $path   = str_replace('+', '/', rawurldecode($encodedPath));
 
-            if (!mediaHubValidatePath($path, $slug)) {
+            if (!Helpers::validatePath($path, $slug)) {
                 return ['status' => 'error', 'message' => 'Invalid folder path'];
             }
 
@@ -488,14 +400,15 @@ return [
                     $folder->delete(true);
                 });
             } catch (\Throwable $e) {
-                return ['status' => 'error', 'message' => $e->getMessage()];
+                error_log('[MediaHub] folder delete failed: ' . $e->getMessage());
+                return ['status' => 'error', 'message' => 'Operation failed.'];
             }
 
             return ['status' => 'ok'];
         },
     ],
 
-    // ── 8. Usage tracking — all pages referencing a file UUID ──────────────
+    // ── 9. Usage tracking — all pages referencing a file UUID ──────────────
     [
         'pattern' => 'media-hub/usage/(:any)',
         'method'  => 'GET',
@@ -533,7 +446,7 @@ return [
         },
     ],
 
-    // ── 9. Dashboard stats ──────────────────────────────────────────────────
+    // ── 10. Dashboard stats ─────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/stats',
         'method'  => 'GET',
@@ -544,7 +457,7 @@ return [
             $root  = $kirby->page($slug);
 
             if (!$root) {
-                return ['total' => 0, 'unused' => 0, 'folders' => 0, 'byType' => [], 'recent' => [], 'largest' => []];
+                return ['total' => 0, 'unused' => null, 'folders' => 0, 'byType' => [], 'recent' => [], 'largest' => []];
             }
 
             // Gather all files from the media hub tree
@@ -590,30 +503,9 @@ return [
                 ];
             }
 
-            // Unused count — files not referenced outside the media-hub
-            $unusedCount = 0;
-            foreach ($allFiles as $file) {
-                $needle = 'file://' . $file->uuid()->id();
-                $used   = false;
-                foreach ($kirby->site()->index() as $p) {
-                    if (str_starts_with($p->id(), $slug)) {
-                        continue;
-                    }
-                    foreach ($p->content()->fields() as $fieldObj) {
-                        if (str_contains((string) $fieldObj->value(), $needle)) {
-                            $used = true;
-                            break 2;
-                        }
-                    }
-                }
-                if (!$used) {
-                    $unusedCount++;
-                }
-            }
-
             return [
                 'total'   => $total,
-                'unused'  => $unusedCount,
+                'unused'  => null, // use GET media-hub/stats/unused for on-demand count
                 'folders' => $folders,
                 'byType'  => $byType,
                 'recent'  => $recent,
@@ -622,7 +514,47 @@ return [
         },
     ],
 
-    // ── 10. Picker — search all media-hub files for the picker field ────────
+    // ── 11. Unused file count (on-demand) ───────────────────────────────────
+    [
+        'pattern' => 'media-hub/stats/unused',
+        'method'  => 'GET',
+        'auth'    => true,
+        'action'  => function () {
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $root  = $kirby->page($slug);
+
+            if (!$root) {
+                return ['unused' => 0];
+            }
+
+            $allFiles = [];
+            foreach ($root->files() as $f) $allFiles[] = $f;
+            foreach ($root->index() as $child) {
+                foreach ($child->files() as $f) $allFiles[] = $f;
+            }
+
+            $unusedCount = 0;
+            foreach ($allFiles as $file) {
+                $needle = 'file://' . $file->uuid()->id();
+                $used   = false;
+                foreach ($kirby->site()->index() as $p) {
+                    if (str_starts_with($p->id(), $slug)) continue;
+                    foreach ($p->content()->fields() as $fieldObj) {
+                        if (str_contains((string) $fieldObj->value(), $needle)) {
+                            $used = true;
+                            break 2;
+                        }
+                    }
+                }
+                if (!$used) $unusedCount++;
+            }
+
+            return ['unused' => $unusedCount];
+        },
+    ],
+
+    // ── 12. Picker — search all media-hub files for the picker field ────────
     [
         'pattern' => 'media-hub/picker',
         'method'  => 'GET',
@@ -662,7 +594,7 @@ return [
             // Collect files — specific folder or all
             $allFiles = [];
             if ($folder) {
-                if (!mediaHubValidatePath($folder, $slug)) {
+                if (!Helpers::validatePath($folder, $slug)) {
                     return ['data' => [], 'pagination' => ['total' => 0, 'page' => 1, 'limit' => 30], 'folderTree' => [], 'tags' => []];
                 }
                 $folderPage = $kirby->page($slug . '/' . $folder);
@@ -764,13 +696,13 @@ return [
         },
     ],
 
-    // ── 11. Unique uploaders (for Smart Filter dropdown) ───────────────────
+    // ── 13. Unique uploaders (for Smart Filter dropdown) ───────────────────
     [
         'pattern' => 'media-hub/uploaders',
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
-            if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -796,13 +728,13 @@ return [
         },
     ],
 
-    // ── 12. All unique tags across the media hub ────────────────────────────
+    // ── 14. All unique tags across the media hub ────────────────────────────
     [
         'pattern' => 'media-hub/tags',
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
-            if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -842,14 +774,14 @@ return [
         },
     ],
 
-    // ── 13. Delete a tag from all files ────────────────────────────────────
+    // ── 15. Delete a tag from all files ────────────────────────────────────
     [
         'pattern' => 'media-hub/tags/(:any)',
         'method'  => 'DELETE',
         'auth'    => true,
         'action'  => function (string $encodedTag) {
-            if ($guard = mediaHubRequirePro()) return $guard;
-            if ($guard = mediaHubRequireAdmin()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -885,14 +817,14 @@ return [
         },
     ],
 
-    // ── 14. Bulk delete ─────────────────────────────────────────────────────
+    // ── 16. Bulk delete ─────────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/bulk/delete',
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
-            if ($guard = mediaHubRequirePro()) return $guard;
-            if ($guard = mediaHubRequireAdmin()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby   = App::instance();
             $slug    = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids     = (array) $kirby->request()->get('ids', []);
@@ -901,13 +833,14 @@ return [
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = mediaHubLoadScopedFile($id, $slug);
+                $file = Helpers::loadScopedFile($id, $slug);
                 if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
                 try {
                     $file->delete();
                     $deleted++;
                 } catch (\Throwable $e) {
-                    $errors[] = basename($id) . ': ' . $e->getMessage();
+                    error_log('[MediaHub] bulk delete failed for ' . basename($id) . ': ' . $e->getMessage());
+                    $errors[] = basename($id) . ': operation failed';
                 }
             }
 
@@ -915,19 +848,19 @@ return [
         },
     ],
 
-    // ── 14. Bulk move ────────────────────────────────────────────────────────
+    // ── 17. Bulk move ────────────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/bulk/move',
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
-            if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
             $kirby        = App::instance();
             $slug         = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids          = (array) $kirby->request()->get('ids', []);
             $targetFolder = trim((string) $kirby->request()->get('targetFolder', ''));
 
-            if ($targetFolder !== '' && !mediaHubValidatePath($targetFolder, $slug)) {
+            if ($targetFolder !== '' && !Helpers::validatePath($targetFolder, $slug)) {
                 return ['status' => 'error', 'message' => 'Invalid target folder path'];
             }
 
@@ -944,7 +877,7 @@ return [
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = mediaHubLoadScopedFile($id, $slug);
+                $file = Helpers::loadScopedFile($id, $slug);
                 if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
                 if ($file->parent()->id() === $target->id()) { $moved++; continue; }
 
@@ -965,7 +898,8 @@ return [
                     });
                     $moved++;
                 } catch (\Throwable $e) {
-                    $errors[] = $file->filename() . ': ' . $e->getMessage();
+                    error_log('[MediaHub] bulk move failed for ' . $file->filename() . ': ' . $e->getMessage());
+                    $errors[] = $file->filename() . ': operation failed';
                 }
             }
 
@@ -973,13 +907,13 @@ return [
         },
     ],
 
-    // ── 15. Bulk rename ──────────────────────────────────────────────────────
+    // ── 18. Bulk rename ──────────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/bulk/rename',
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
-            if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
             $kirby   = App::instance();
             $slug    = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids     = (array) $kirby->request()->get('ids', []);
@@ -996,7 +930,7 @@ return [
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = mediaHubLoadScopedFile($id, $slug);
+                $file = Helpers::loadScopedFile($id, $slug);
                 if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; $i++; continue; }
 
                 $newSlug = Str::slug(str_replace('{n}', $i, $pattern));
@@ -1008,7 +942,8 @@ return [
                     });
                     $renamed++;
                 } catch (\Throwable $e) {
-                    $errors[] = $file->filename() . ': ' . $e->getMessage();
+                    error_log('[MediaHub] bulk rename failed for ' . $file->filename() . ': ' . $e->getMessage());
+                    $errors[] = $file->filename() . ': operation failed';
                 }
                 $i++;
             }
@@ -1017,13 +952,13 @@ return [
         },
     ],
 
-    // ── 16. Bulk tag ─────────────────────────────────────────────────────────
+    // ── 19. Bulk tag ─────────────────────────────────────────────────────────
     [
         'pattern' => 'media-hub/bulk/tag',
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
-            if ($guard = mediaHubRequirePro()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
             $kirby  = App::instance();
             $slug   = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids    = (array) $kirby->request()->get('ids', []);
@@ -1035,7 +970,7 @@ return [
 
             foreach ($ids as $encodedId) {
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
-                $file = mediaHubLoadScopedFile($id, $slug);
+                $file = Helpers::loadScopedFile($id, $slug);
                 if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
 
                 $raw      = (string) $file->content()->get('tags')->value();
@@ -1055,7 +990,8 @@ return [
                     });
                     $updated++;
                 } catch (\Throwable $e) {
-                    $errors[] = $file->filename() . ': ' . $e->getMessage();
+                    error_log('[MediaHub] bulk tag failed for ' . $file->filename() . ': ' . $e->getMessage());
+                    $errors[] = $file->filename() . ': operation failed';
                 }
             }
 
@@ -1063,14 +999,14 @@ return [
         },
     ],
 
-    // ── 17. Duplicate detection ──────────────────────────────────────────────
+    // ── 20. Duplicate detection ──────────────────────────────────────────────
     [
         'pattern' => 'media-hub/duplicates',
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
-            if ($guard = mediaHubRequirePro()) return $guard;
-            if ($guard = mediaHubRequireAdmin()) return $guard;
+            if ($guard = Helpers::requirePro()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $root  = $kirby->page($slug);
@@ -1117,7 +1053,7 @@ return [
                 usort($group, fn ($a, $b) => $a->modified() <=> $b->modified());
                 $exactGroups[] = [
                     'hash'  => $hash,
-                    'files' => array_map(fn ($f) => mediaHubSerializeFile($f), $group),
+                    'files' => array_map(fn ($f) => Helpers::serializeFile($f), $group),
                 ];
             }
 
@@ -1155,7 +1091,7 @@ return [
                 usort($group, fn ($a, $b) => strcmp($a->filename(), $b->filename()));
                 $similarGroups[] = [
                     'baseName' => $base,
-                    'files'    => array_map(fn ($f) => mediaHubSerializeFile($f), $group),
+                    'files'    => array_map(fn ($f) => Helpers::serializeFile($f), $group),
                 ];
             }
 

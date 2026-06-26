@@ -7,6 +7,7 @@ if (!class_exists(\Kirbycode\MediaHub\Licensing\LicenseManager::class)) {
     require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
     require_once __DIR__ . '/src/Licensing/LicenseManager.php';
     require_once __DIR__ . '/src/Licensing/UpdateChecker.php';
+    require_once __DIR__ . '/src/Api/Helpers.php';
 }
 
 App::plugin('kirbycode/media-hub', [
@@ -73,8 +74,8 @@ App::plugin('kirbycode/media-hub', [
                                     'uploadApiBase' => 'pages/' . $slug,
                                     'isPro'           => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
                                     'isAdmin'         => $kirby->user() ? $kirby->user()->isAdmin() : false,
-                                    'updateAvailable' => \Kirbycode\MediaHub\Licensing\UpdateChecker::hasUpdate(),
-                                    'latestVersion'   => \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion() ?? '',
+                                    'updateAvailable' => ($updateLatest = \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion()) !== null,
+                                    'latestVersion'   => $updateLatest ?? '',
                                 ],
                             ];
                         },
@@ -92,8 +93,8 @@ App::plugin('kirbycode/media-hub', [
                                 'props'     => [
                                     'apiUrl'          => $apiUrl,
                                     'status'          => \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus(),
-                                    'updateAvailable' => \Kirbycode\MediaHub\Licensing\UpdateChecker::hasUpdate(),
-                                    'latestVersion'   => \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion() ?? '',
+                                    'updateAvailable' => ($updateLatest = \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion()) !== null,
+                                    'latestVersion'   => $updateLatest ?? '',
                                 ],
                             ];
                         },
@@ -143,8 +144,8 @@ App::plugin('kirbycode/media-hub', [
                                     'uploadApiBase' => 'pages/' . $slug . '+' . $folderSlug,
                                     'isPro'           => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
                                     'isAdmin'         => $kirby->user() ? $kirby->user()->isAdmin() : false,
-                                    'updateAvailable' => \Kirbycode\MediaHub\Licensing\UpdateChecker::hasUpdate(),
-                                    'latestVersion'   => \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion() ?? '',
+                                    'updateAvailable' => ($updateLatest = \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion()) !== null,
+                                    'latestVersion'   => $updateLatest ?? '',
                                 ],
                             ];
                         },

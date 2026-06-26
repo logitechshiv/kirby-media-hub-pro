@@ -50,6 +50,9 @@ return [
                 if (!is_string($ref) || trim($ref) === '') {
                     continue;
                 }
+                if (!str_starts_with($ref, 'file://')) {
+                    continue;
+                }
 
                 $file = $kirby->file($ref);
                 if (!$file) {
@@ -88,8 +91,11 @@ return [
         $uuids = [];
         foreach ((array) $value as $item) {
             if (is_array($item) && isset($item['uuid']) && !empty($item['uuid'])) {
-                $uuids[] = (string) $item['uuid'];
-            } elseif (is_string($item) && !empty(trim($item))) {
+                $uuid = (string) $item['uuid'];
+                if (str_starts_with($uuid, 'file://')) {
+                    $uuids[] = $uuid;
+                }
+            } elseif (is_string($item) && !empty(trim($item)) && str_starts_with($item, 'file://')) {
                 $uuids[] = $item;
             }
         }

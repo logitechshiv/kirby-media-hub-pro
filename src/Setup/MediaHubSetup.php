@@ -15,6 +15,9 @@ class MediaHubSetup
     {
         $kirby = App::instance();
         $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+        if (!preg_match('/^[a-z0-9][a-z0-9\-]*$/', (string) $slug)) {
+            $slug = 'media-hub';
+        }
         $root  = $kirby->root('content') . '/' . $slug;
 
         if (Dir::exists($root)) {

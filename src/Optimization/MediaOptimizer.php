@@ -7,10 +7,13 @@ use Kirby\Cms\File;
 
 class MediaOptimizer
 {
+    // Prevents re-entrant optimization when createFile triggers file.create:after
+    private static bool $converting = false;
+
     // ── Public entry points ────────────────────────────────────────────────────
 
     /**
-     * Called from file.create:after hook — AFTER uploadedby is written to the sidecar.
+     * Called from file.create:after hook.
      */
     public static function optimizeOnUpload(File $file): array
     {
@@ -29,6 +32,7 @@ class MediaOptimizer
 
     private static function run(File $file): array
     {
+        if (self::$converting) return self::noop();
         if ($file->type() !== 'image') return self::noop();
         if (in_array($file->extension(), ['svg', 'gif'], true)) return self::noop();
 
@@ -37,12 +41,10 @@ class MediaOptimizer
 
         $ext = strtolower($file->extension());
 
-        // JPEG/PNG → convert to WebP (sidecar copy preserves UUID + all metadata)
         if (in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
             return self::convertToWebP($file, $opt);
         }
 
-        // Already WebP → compress in-place
         if ($ext === 'webp') {
             $compressed = self::compressInPlace($file, $opt);
             return [
@@ -60,8 +62,9 @@ class MediaOptimizer
     // ── WebP conversion ────────────────────────────────────────────────────────
 
     /**
-     * Convert JPEG/PNG to WebP via GD, copy the .txt sidecar (preserving UUID and
-     * all metadata), then delete the original files.
+     * Convert JPEG/PNG to WebP using Kirby's file model so hooks, UUID index,
+     * and cache stay consistent. The old UUID is re-stamped on the new file to
+     * preserve all existing file:// references in content.
      */
     private static function convertToWebP(File $file, array $opt): array
     {
@@ -69,20 +72,22 @@ class MediaOptimizer
             return array_merge(self::noop(), ['error' => 'GD extension not available']);
         }
 
+        $guard = self::guardSize($file);
+        if ($guard !== null) return $guard;
+
         $ext  = strtolower($file->extension());
         $root = $file->root();
 
         if (!is_readable($root)) return self::noop();
 
-        // Load source image
+        $image = null;
         switch ($ext) {
             case 'jpg':
             case 'jpeg':
-                $image = @imagecreatefromjpeg($root);
+                $image = imagecreatefromjpeg($root);
                 break;
             case 'png':
-                $image = @imagecreatefrompng($root);
-                // Preserve transparency
+                $image = imagecreatefrompng($root);
                 if ($image) {
                     imagepalettetotruecolor($image);
                     imagealphablending($image, false);
@@ -95,30 +100,55 @@ class MediaOptimizer
 
         if (!$image) return self::noop();
 
-        $quality  = ($opt['quality'] ?? [])['webp'] ?? 82;
-        $origSize = (int) filesize($root);
-        $webpRoot = (string) preg_replace('/\.(jpe?g|png)$/i', '.webp', $root);
+        $quality     = ($opt['quality'] ?? [])['webp'] ?? 82;
+        $origSize    = (int) filesize($root);
+        $newFilename = (string) preg_replace('/\.(jpe?g|png)$/i', '.webp', $file->filename());
+        $tmpPath     = sys_get_temp_dir() . '/' . uniqid('mh_', true) . '.webp';
 
-        $ok = imagewebp($image, $webpRoot, $quality);
+        $ok = imagewebp($image, $tmpPath, $quality);
         imagedestroy($image);
 
-        if (!$ok || !file_exists($webpRoot)) return self::noop();
+        if (!$ok || !file_exists($tmpPath)) return self::noop();
 
-        // Copy sidecar — preserves UUID, title, alt, description, tags, uploadedby
-        $sidecarSrc = $root . '.txt';
-        $sidecarDst = $webpRoot . '.txt';
-        if (file_exists($sidecarSrc)) {
-            @copy($sidecarSrc, $sidecarDst);
+        $newSize  = (int) filesize($tmpPath);
+        $parent   = $file->parent();
+        $oldUuid  = $file->uuid()->id();
+        $template = $file->template() ?: 'default';
+        $metadata = $file->content()->toArray();
+        $newFile  = null;
+
+        self::$converting = true;
+        try {
+            $kirby = App::instance();
+
+            // createFile triggers file.create:after — self::$converting prevents recursion
+            $newFile = $kirby->impersonate('kirby', function () use ($parent, $tmpPath, $newFilename, $template) {
+                return $parent->createFile([
+                    'filename' => $newFilename,
+                    'source'   => $tmpPath,
+                    'template' => $template,
+                ]);
+            });
+
+            // Re-stamp old UUID so existing file:// references remain valid
+            $updateData         = array_filter($metadata, fn($v) => $v !== '');
+            $updateData['uuid'] = $oldUuid;
+            $kirby->impersonate('kirby', function () use ($newFile, $updateData) {
+                $newFile->update($updateData);
+            });
+
+            $kirby->impersonate('kirby', function () use ($file) {
+                $file->delete();
+            });
+        } catch (\Throwable $e) {
+            error_log('[MediaHub] convertToWebP failed: ' . $e->getMessage());
+            return self::noop();
+        } finally {
+            self::$converting = false;
+            if (file_exists($tmpPath)) {
+                unlink($tmpPath);
+            }
         }
-
-        // Delete originals
-        @unlink($root);
-        @unlink($sidecarSrc);
-        @clearstatcache();
-
-        $newSize     = (int) filesize($webpRoot);
-        $newFilename = basename($webpRoot);
-        $newId       = $file->parent()->id() . '/' . $newFilename;
 
         return [
             'converted'   => true,
@@ -131,16 +161,16 @@ class MediaOptimizer
                     : 0,
             ],
             'newFilename' => $newFilename,
-            'newId'       => $newId,
-            'uuid'        => $file->uuid()->id(),
+            'newId'       => $newFile->id(),
+            'uuid'        => $oldUuid,
         ];
     }
 
     // ── In-place WebP compression ──────────────────────────────────────────────
 
     /**
-     * Re-encode an existing WebP at the configured quality. Replaces the file
-     * only if the result is smaller.
+     * Re-encode an existing WebP at the configured quality. Replaces file content
+     * only if the result is smaller; metadata and UUID sidecar are untouched.
      */
     private static function compressInPlace(File $file, array $opt): ?array
     {
@@ -149,8 +179,13 @@ class MediaOptimizer
         $root = $file->root();
         if (!is_readable($root) || !is_writable($root)) return null;
 
-        $quality = ($opt['quality'] ?? [])['webp'] ?? 82;
-        $image   = @imagecreatefromwebp($root);
+        $maxBytes = 25 * 1024 * 1024;
+        if (filesize($root) > $maxBytes) return null;
+        $dims = @getimagesize($root);
+        if ($dims && ($dims[0] > 8000 || $dims[1] > 8000)) return null;
+
+        $quality  = ($opt['quality'] ?? [])['webp'] ?? 82;
+        $image    = imagecreatefromwebp($root);
         if (!$image) return null;
 
         $origSize = (int) filesize($root);
@@ -159,14 +194,16 @@ class MediaOptimizer
         imagedestroy($image);
 
         if (!$ok || !file_exists($tmp)) {
-            @unlink($tmp);
+            if (file_exists($tmp)) {
+                unlink($tmp);
+            }
             return null;
         }
 
         $newSize = (int) filesize($tmp);
 
         if ($newSize >= $origSize) {
-            @unlink($tmp);
+            unlink($tmp);
             return [
                 'originalSize' => $origSize,
                 'newSize'      => $origSize,
@@ -175,8 +212,13 @@ class MediaOptimizer
             ];
         }
 
-        @rename($tmp, $root);
-        @clearstatcache(true, $root);
+        if (!rename($tmp, $root)) {
+            error_log('[MediaHub] compressInPlace: rename failed for ' . basename($root));
+            unlink($tmp);
+            return null;
+        }
+
+        clearstatcache(true, $root);
 
         return [
             'originalSize' => $origSize,
@@ -189,6 +231,23 @@ class MediaOptimizer
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    /**
+     * Returns a skipped-noop array if the file exceeds safe GD processing limits,
+     * or null if the file is within limits and safe to process.
+     */
+    private static function guardSize(File $file): ?array
+    {
+        $maxBytes = 25 * 1024 * 1024;
+        if (filesize($file->root()) > $maxBytes) {
+            return array_merge(self::noop(), ['skipped' => true, 'reason' => 'File too large for optimization']);
+        }
+        $dims = @getimagesize($file->root());
+        if ($dims && ($dims[0] > 8000 || $dims[1] > 8000)) {
+            return array_merge(self::noop(), ['skipped' => true, 'reason' => 'Image dimensions too large']);
+        }
+        return null;
+    }
 
     private static function noop(): array
     {

@@ -1078,7 +1078,7 @@ window.panel.plugin('kirbycode/media-hub', {
         apiUrl: { type: String, required: true },
       },
       data() {
-        return { stats: null, loading: false };
+        return { stats: null, loading: false, unusedCount: null, unusedLoading: false };
       },
       async created() {
         this.loading = true;
@@ -1090,6 +1090,19 @@ window.panel.plugin('kirbycode/media-hub', {
           this.loading = false;
         }
       },
+      methods: {
+        async checkUnused() {
+          this.unusedLoading = true;
+          try {
+            const res = await this.$panel.api.get('media-hub/stats/unused');
+            this.unusedCount = res.unused;
+          } catch (e) {
+            // Non-critical
+          } finally {
+            this.unusedLoading = false;
+          }
+        },
+      },
       template: `
         <div class="k-media-hub-stats" v-if="stats">
           <div class="k-media-hub-stat">
@@ -1097,7 +1110,10 @@ window.panel.plugin('kirbycode/media-hub', {
             <span class="k-media-hub-stat-label">Total Files</span>
           </div>
           <div class="k-media-hub-stat">
-            <span class="k-media-hub-stat-value">{{ stats.unused }}</span>
+            <span class="k-media-hub-stat-value">
+              <template v-if="unusedCount !== null">{{ unusedCount }}</template>
+              <button v-else type="button" class="k-media-hub-btn k-media-hub-btn--sm" :disabled="unusedLoading" @click="checkUnused" style="font-size:11px;padding:2px 8px">{{ unusedLoading ? '…' : 'Check' }}</button>
+            </span>
             <span class="k-media-hub-stat-label">Unused</span>
           </div>
           <div class="k-media-hub-stat">
@@ -1589,10 +1605,6 @@ window.panel.plugin('kirbycode/media-hub', {
           this.keepFile(sorted[0].id, groupFiles);
         },
 
-        thumbOrIcon(file) {
-          if (file.thumb) return '<img src="' + file.thumb + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:4px" />';
-          return '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-        },
       },
 
       template: `
@@ -1658,7 +1670,10 @@ window.panel.plugin('kirbycode/media-hub', {
                 </div>
                 <div class="k-media-hub-dupes-cards">
                   <div v-for="file in group.files" :key="file.id" class="k-media-hub-dupes-card">
-                    <div class="k-media-hub-dupes-card-thumb" v-html="thumbOrIcon(file)"></div>
+                    <div class="k-media-hub-dupes-card-thumb">
+                      <img v-if="file.thumb" :src="file.thumb" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:4px" />
+                      <svg v-else width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
                     <div class="k-media-hub-dupes-card-info">
                       <span class="k-media-hub-dupes-card-name" :title="file.filename">{{ file.filename }}</span>
                       <span class="k-media-hub-dupes-card-meta">{{ file.niceSize }} &bull; {{ file.modified }}</span>
@@ -1689,7 +1704,10 @@ window.panel.plugin('kirbycode/media-hub', {
                 </div>
                 <div class="k-media-hub-dupes-cards">
                   <div v-for="file in group.files" :key="file.id" class="k-media-hub-dupes-card">
-                    <div class="k-media-hub-dupes-card-thumb" v-html="thumbOrIcon(file)"></div>
+                    <div class="k-media-hub-dupes-card-thumb">
+                      <img v-if="file.thumb" :src="file.thumb" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:4px" />
+                      <svg v-else width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
                     <div class="k-media-hub-dupes-card-info">
                       <span class="k-media-hub-dupes-card-name" :title="file.filename">{{ file.filename }}</span>
                       <span class="k-media-hub-dupes-card-meta">{{ file.niceSize }} &bull; {{ file.modified }}</span>
