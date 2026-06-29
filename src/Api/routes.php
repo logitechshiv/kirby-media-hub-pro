@@ -31,6 +31,7 @@ return [
         'method'  => 'POST',
         'auth'    => true,
         'action'  => function () {
+            if ($guard = Helpers::requireAdmin()) return $guard;
             \Kirbycode\MediaHub\Licensing\LicenseManager::bustCache();
             return \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus();
         },
@@ -192,6 +193,7 @@ return [
         'method'  => 'PATCH',
         'auth'    => true,
         'action'  => function (string $encodedId) {
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
@@ -225,6 +227,7 @@ return [
         'method'  => 'DELETE',
         'auth'    => true,
         'action'  => function (string $encodedId) {
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
@@ -249,6 +252,7 @@ return [
         'auth'    => true,
         'action'  => function (string $encodedId) {
             if ($guard = Helpers::requirePro()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             require_once dirname(__DIR__) . '/Optimization/MediaOptimizer.php';
 
             $kirby = App::instance();
@@ -322,6 +326,15 @@ return [
 
             if ($title === '') {
                 return ['status' => 'error', 'message' => 'Folder name is required'];
+            }
+
+            if ($parentPath !== '') {
+                if (!Helpers::validatePath($parentPath, $slug)) {
+                    return ['status' => 'error', 'message' => 'Invalid parent folder'];
+                }
+                if (substr_count($parentPath, '/') >= 1) {
+                    return ['status' => 'error', 'message' => 'Only one subfolder level is allowed'];
+                }
             }
 
             $parent = $parentPath !== ''
@@ -855,6 +868,7 @@ return [
         'auth'    => true,
         'action'  => function () {
             if ($guard = Helpers::requirePro()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby        = App::instance();
             $slug         = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids          = (array) $kirby->request()->get('ids', []);
@@ -914,6 +928,7 @@ return [
         'auth'    => true,
         'action'  => function () {
             if ($guard = Helpers::requirePro()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby   = App::instance();
             $slug    = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids     = (array) $kirby->request()->get('ids', []);
@@ -959,6 +974,7 @@ return [
         'auth'    => true,
         'action'  => function () {
             if ($guard = Helpers::requirePro()) return $guard;
+            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby  = App::instance();
             $slug   = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids    = (array) $kirby->request()->get('ids', []);

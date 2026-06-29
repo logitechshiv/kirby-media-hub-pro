@@ -45,8 +45,19 @@ class Helpers
     }
 
     /**
+     * Returns true when $id is exactly the root slug or a direct descendant of it.
+     * Uses an exact boundary check — str_starts_with($id, $root) alone would allow
+     * a page named 'media-hub-evil' to match a root slug of 'media-hub'.
+     */
+    public static function isInsideRoot(string $id, string $root): bool
+    {
+        return $id === $root || str_starts_with($id, $root . '/');
+    }
+
+    /**
      * Load a file by ID and verify it lives within the Media Hub directory.
-     * Returns the File on success, or a 404/403 JSON Response on failure.
+     * Returns 404 for both missing and out-of-scope files so the API does not
+     * confirm whether a file exists outside the Media Hub.
      */
     public static function loadScopedFile(string $id, string $slug): File|Response
     {
@@ -54,8 +65,8 @@ class Helpers
         if (!$file) {
             return Response::json(['status' => 'error', 'message' => 'File not found'], 404);
         }
-        if (!str_starts_with($file->parent()->id(), $slug)) {
-            return Response::json(['status' => 'error', 'message' => 'Access denied'], 403);
+        if (!self::isInsideRoot($file->parent()->id(), $slug)) {
+            return Response::json(['status' => 'error', 'message' => 'File not found'], 404);
         }
         return $file;
     }

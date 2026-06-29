@@ -78,7 +78,8 @@ class LicenseManager
     {
         $until = self::readGraceFile();
         if ($until !== null && time() < $until) {
-            self::writeGraceFile();
+            // Do NOT extend the grace window here — it is only written after a
+            // successful validation so the 48-hour period is fixed, not sliding.
             return true;
         }
         return false;

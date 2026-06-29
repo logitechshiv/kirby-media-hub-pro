@@ -44,6 +44,8 @@ return [
                 }
             }
 
+            $slug = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+
             // Resolve each file:// UUID to a full file object for Vue
             $result = [];
             foreach ($refs as $ref) {
@@ -56,6 +58,11 @@ return [
 
                 $file = $kirby->file($ref);
                 if (!$file) {
+                    continue;
+                }
+
+                $parentId = $file->parent()->id();
+                if ($parentId !== $slug && !str_starts_with($parentId, $slug . '/')) {
                     continue;
                 }
 
@@ -82,30 +89,47 @@ return [
         },
     ],
 
-    // Convert Vue's array of {uuid, ...} objects to a YAML list of file:// URIs
+    // Convert Vue's array of {uuid, ...} objects to a YAML list of file:// URIs.
+    // Each UUID is resolved and verified to belong to the Media Hub before saving.
     'save' => function ($value = null) {
         if (empty($value)) {
             return null;
         }
 
+        $kirby = \Kirby\Cms\App::instance();
+        $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
         $uuids = [];
+
         foreach ((array) $value as $item) {
-            if (is_array($item) && isset($item['uuid']) && !empty($item['uuid'])) {
+            $uuid = null;
+            if (is_array($item) && !empty($item['uuid'])) {
                 $uuid = (string) $item['uuid'];
-                if (str_starts_with($uuid, 'file://')) {
-                    $uuids[] = $uuid;
-                }
-            } elseif (is_string($item) && !empty(trim($item)) && str_starts_with($item, 'file://')) {
-                $uuids[] = $item;
+            } elseif (is_string($item) && trim($item) !== '') {
+                $uuid = trim($item);
             }
+
+            if (!$uuid || !str_starts_with($uuid, 'file://')) {
+                continue;
+            }
+
+            $file = $kirby->file($uuid);
+            if (!$file) {
+                continue;
+            }
+
+            $parentId = $file->parent()->id();
+            if ($parentId !== $slug && !str_starts_with($parentId, $slug . '/')) {
+                continue;
+            }
+
+            $uuids[] = $uuid;
         }
 
         if (empty($uuids)) {
             return null;
         }
 
-        // Standard Kirby YAML list format: "- file://abc\n- file://def"
-        return implode("\n", array_map(fn ($u) => '- ' . $u, $uuids));
+        return \Kirby\Data\Yaml::encode(array_values(array_unique($uuids)));
     },
 
     'validations' => ['max', 'min'],
