@@ -329,6 +329,7 @@ return [
             }
 
             if ($parentPath !== '') {
+                if ($guard = Helpers::requirePro()) return $guard;
                 if (!Helpers::validatePath($parentPath, $slug)) {
                     return ['status' => 'error', 'message' => 'Invalid parent folder'];
                 }
