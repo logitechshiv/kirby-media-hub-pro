@@ -21,7 +21,12 @@ return [
         'method'  => 'GET',
         'auth'    => true,
         'action'  => function () {
-            return \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus();
+            $status = \Kirbycode\MediaHub\Licensing\LicenseManager::getStatus();
+            $user   = \Kirby\Cms\App::instance()->user();
+            if (!$user || $user->role()->id() !== 'admin') {
+                return ['isPro' => $status['isPro'], 'hasKey' => $status['hasKey']];
+            }
+            return $status;
         },
     ],
 

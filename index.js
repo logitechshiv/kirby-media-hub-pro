@@ -897,15 +897,15 @@ window.panel.plugin('kirbycode/media-hub', {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     Delete
                   </button>
-                  <button type="button" :class="['k-media-hub-btn', { 'k-media-hub-btn--active': bulkAction === 'move' }]" @click="setBulkAction('move')">
+                  <button v-if="isAdmin" type="button" :class="['k-media-hub-btn', { 'k-media-hub-btn--active': bulkAction === 'move' }]" @click="setBulkAction('move')">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
                     Move
                   </button>
-                  <button type="button" :class="['k-media-hub-btn', { 'k-media-hub-btn--active': bulkAction === 'rename' }]" @click="setBulkAction('rename')">
+                  <button v-if="isAdmin" type="button" :class="['k-media-hub-btn', { 'k-media-hub-btn--active': bulkAction === 'rename' }]" @click="setBulkAction('rename')">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     Rename
                   </button>
-                  <button type="button" :class="['k-media-hub-btn', { 'k-media-hub-btn--active': bulkAction === 'tag' }]" @click="setBulkAction('tag')">
+                  <button v-if="isAdmin" type="button" :class="['k-media-hub-btn', { 'k-media-hub-btn--active': bulkAction === 'tag' }]" @click="setBulkAction('tag')">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                     Tag
                   </button>
