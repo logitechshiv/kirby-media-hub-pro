@@ -206,7 +206,7 @@ return [
             if ($file instanceof \Kirby\Http\Response) return $file;
 
             $body    = $kirby->request()->body()->toArray();
-            $allowed = ['title', 'alt', 'description', 'copyright', 'photographer', 'tags'];
+            $allowed = ['title', 'alt', 'description', 'copyright', 'photographer', 'tags', 'aigenerated'];
             $content = [];
 
             foreach ($allowed as $field) {

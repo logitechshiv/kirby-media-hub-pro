@@ -100,6 +100,7 @@ class Helpers
             'description'  => (string) $file->content()->get('description')->value(),
             'copyright'    => (string) $file->content()->get('copyright')->value(),
             'photographer' => (string) $file->content()->get('photographer')->value(),
+            'aigenerated'  => $file->content()->get('aigenerated')->toBool(),
             'tags'         => $tagsRaw ? array_values(array_filter(array_map('trim', explode(',', $tagsRaw)))) : [],
             'uploadedby'   => (string) $file->content()->get('uploadedby')->value(),
             'uploaddate'   => (string) $file->content()->get('uploaddate')->value(),

@@ -1159,6 +1159,7 @@ window.panel.plugin('kirbycode/media-hub', {
           <div class="k-media-hub-file-preview">
             <img v-if="file.thumb" :src="file.thumb" :alt="file.alt || file.filename" loading="lazy" />
             <span v-else class="k-media-hub-file-icon" v-html="iconFor(file.type)"></span>
+            <span v-if="file.aigenerated" class="k-media-hub-ai-badge" title="AI-generated">AI</span>
           </div>
           <div class="k-media-hub-file-info">
             <span class="k-media-hub-file-name" :title="file.filename">{{ file.filename }}</span>
@@ -1221,6 +1222,7 @@ window.panel.plugin('kirbycode/media-hub', {
             description:  this.file.description  || '',
             copyright:    this.file.copyright    || '',
             photographer: this.file.photographer || '',
+            aigenerated:  this.file.aigenerated   || false,
             tags:         [...(this.file.tags    || [])],
           },
           tagInput:   '',
@@ -1243,6 +1245,7 @@ window.panel.plugin('kirbycode/media-hub', {
             description:  newFile.description  || '',
             copyright:    newFile.copyright    || '',
             photographer: newFile.photographer || '',
+            aigenerated:  newFile.aigenerated   || false,
             tags:         [...(newFile.tags    || [])],
           };
           this.tagInput    = '';
@@ -1416,6 +1419,13 @@ window.panel.plugin('kirbycode/media-hub', {
                 <input v-model="form.photographer" type="text" class="k-media-hub-input" placeholder="Name…" />
               </label>
             </div>
+            <label class="k-media-hub-field k-media-hub-field--checkbox">
+              <span>AI-Generated</span>
+              <span class="k-media-hub-toggle">
+                <input v-model="form.aigenerated" type="checkbox" class="k-media-hub-toggle-input" />
+                <span class="k-media-hub-toggle-track"></span>
+              </span>
+            </label>
             <div class="k-media-hub-field">
               <span>Tags</span>
               <div class="k-media-hub-tags-editor">

@@ -27,6 +27,15 @@ fields:
     type: text
     width: 1/2
 
+  aigenerated:
+    label: AI-Generated
+    type: toggle
+    text:
+      - 'No'
+      - 'Yes'
+    default: false
+    width: 1/2
+
   uploaddate:
     label: Upload Date
     type: date
