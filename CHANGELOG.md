@@ -7,6 +7,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+---
+
+## [1.2.0] — 2026-09-09
+
+### Fixed
+
+- **JPG/PNG uploads leaving a duplicate original** — WebP conversion now replaces bytes on the same Kirby file and changes the extension in place (UUID unchanged). The old create-then-delete path could leave both `.jpg`/`.png` and `.webp` when delete failed.
+- **Kirby 5 immutable storage blocking conversion** — `file.create:after` now uses the file instance returned from `update()` before running optimization.
+
+---
+
 ## [3.0.0] — 2026-06-11
 
 ### Added

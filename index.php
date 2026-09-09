@@ -188,12 +188,15 @@ App::plugin('kirbycode/media-hub', [
             }
             $user = $kirby->user();
             if (!$user) return;
+
+            $working = $file;
             try {
                 $display = $user->name()->isNotEmpty()
                     ? (string) $user->name()
                     : $user->email();
-                $kirby->impersonate('kirby', function () use ($file, $display) {
-                    $file->update(['uploadedby' => $display]);
+                $working = $kirby->impersonate('kirby', function () use ($file, $display) {
+                    // Kirby 5: update() freezes $file — always use the returned instance
+                    return $file->update(['uploadedby' => $display]);
                 });
             } catch (\Throwable $e) {
                 // non-critical — don't break the upload if this fails
@@ -202,7 +205,7 @@ App::plugin('kirbycode/media-hub', [
             // Convert to WebP and compress — V2 Pro feature
             if (\Kirbycode\MediaHub\Licensing\LicenseManager::isPro()) {
                 try {
-                    \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimizeOnUpload($file);
+                    \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimizeOnUpload($working);
                 } catch (\Throwable $e) {
                     // non-critical — never break the upload
                 }

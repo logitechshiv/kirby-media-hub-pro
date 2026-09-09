@@ -7,7 +7,7 @@ use Kirby\Cms\File;
 
 class MediaOptimizer
 {
-    // Prevents re-entrant optimization when createFile triggers file.create:after
+    // Prevents re-entrant optimization if replace/rename fires file hooks
     private static bool $converting = false;
 
     // ── Public entry points ────────────────────────────────────────────────────
@@ -62,9 +62,8 @@ class MediaOptimizer
     // ── WebP conversion ────────────────────────────────────────────────────────
 
     /**
-     * Convert JPEG/PNG to WebP using Kirby's file model so hooks, UUID index,
-     * and cache stay consistent. The old UUID is re-stamped on the new file to
-     * preserve all existing file:// references in content.
+     * Convert JPEG/PNG to WebP on the same Kirby File so UUID, parent, and
+     * file:// references stay intact. Never creates a second file.
      */
     private static function convertToWebP(File $file, array $opt): array
     {
@@ -110,35 +109,38 @@ class MediaOptimizer
 
         if (!$ok || !file_exists($tmpPath)) return self::noop();
 
-        $newSize  = (int) filesize($tmpPath);
-        $parent   = $file->parent();
-        $oldUuid  = $file->uuid()->id();
-        $template = $file->template() ?: 'default';
-        $metadata = $file->content()->toArray();
-        $newFile  = null;
+        $newSize = (int) filesize($tmpPath);
+        $oldUuid = $file->uuid()->id();
+        $parent  = $file->parent();
+
+        // A sibling .webp from a previous failed convert would make changeName throw.
+        // Abort without creating another file — keep the original.
+        if ($parent->file($newFilename)) {
+            if (file_exists($tmpPath)) {
+                unlink($tmpPath);
+            }
+            error_log('[MediaHub] convertToWebP skipped: ' . $newFilename . ' already exists');
+            return self::noop();
+        }
+
+        $newFile = null;
 
         self::$converting = true;
         try {
             $kirby = App::instance();
 
-            // createFile triggers file.create:after — self::$converting prevents recursion
-            $newFile = $kirby->impersonate('kirby', function () use ($parent, $tmpPath, $newFilename, $template) {
-                return $parent->createFile([
-                    'filename' => $newFilename,
-                    'source'   => $tmpPath,
-                    'template' => $template,
-                ]);
-            });
+            // Same File: swap bytes, then rename extension. Reload from Kirby
+            // after replace so Kirby 5 immutable storage does not block changeName.
+            $newFile = $kirby->impersonate('kirby', function () use ($file, $tmpPath, $kirby) {
+                $live = $file->parent()->file($file->filename()) ?? $file;
+                $replaced = $live->replace($tmpPath, true);
 
-            // Re-stamp old UUID so existing file:// references remain valid
-            $updateData         = array_filter($metadata, fn($v) => $v !== '');
-            $updateData['uuid'] = $oldUuid;
-            $kirby->impersonate('kirby', function () use ($newFile, $updateData) {
-                $newFile->update($updateData);
-            });
+                $parentId = $replaced->parent()->id();
+                $filename = $replaced->filename();
+                $parent   = $kirby->page($parentId);
+                $fresh    = $parent ? $parent->file($filename) : $replaced;
 
-            $kirby->impersonate('kirby', function () use ($file) {
-                $file->delete();
+                return $fresh->changeName($fresh->name(), false, 'webp');
             });
         } catch (\Throwable $e) {
             error_log('[MediaHub] convertToWebP failed: ' . $e->getMessage());
@@ -148,6 +150,10 @@ class MediaOptimizer
             if (file_exists($tmpPath)) {
                 unlink($tmpPath);
             }
+        }
+
+        if (!$newFile) {
+            return self::noop();
         }
 
         return [
@@ -160,7 +166,7 @@ class MediaOptimizer
                     ? round(100 - ($newSize / $origSize * 100), 1)
                     : 0,
             ],
-            'newFilename' => $newFilename,
+            'newFilename' => $newFile->filename(),
             'newId'       => $newFile->id(),
             'uuid'        => $oldUuid,
         ];
