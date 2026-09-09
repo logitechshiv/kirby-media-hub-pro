@@ -10,7 +10,9 @@ if (!class_exists(\Kirbycode\MediaHub\Licensing\LicenseManager::class)) {
     require_once __DIR__ . '/src/Api/Helpers.php';
 }
 
-App::plugin('kirbycode/media-hub', [
+App::plugin(
+    'kirbycode/media-hub',
+    [
 
     // ── License cache driver ────────────────────────────────────────────────
     'cache' => [
@@ -213,4 +215,6 @@ App::plugin('kirbycode/media-hub', [
         },
     ],
 
-]);
+],
+    version: \Kirbycode\MediaHub\Licensing\UpdateChecker::CURRENT_VERSION
+);

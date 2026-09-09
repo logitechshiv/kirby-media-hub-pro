@@ -11,6 +11,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.2.1] — 2026-09-09
+
+### Fixed
+
+- **Panel System page showed 1.0.0** — plugin version is now passed into `App::plugin()` from `UpdateChecker::CURRENT_VERSION` so Kirby reads the same number as Packagist after deploy
+
+---
+
 ## [1.2.0] — 2026-09-09
 
 ### Fixed
