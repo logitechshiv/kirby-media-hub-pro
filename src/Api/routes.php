@@ -12,8 +12,12 @@ if (!class_exists(Helpers::class)) {
 /**
  * All custom API routes for the Media Hub.
  * Patterns are relative to /api/ — e.g. 'media-hub/files' → GET /api/media-hub/files
+ *
+ * Every route requires access to the Media Hub Panel area (see the
+ * guardAreaAccess() call at the end), except the ones the page picker
+ * field needs — those stay open and rely on Kirby's file permissions.
  */
-return [
+$routes = [
 
     // ── License status ──────────────────────────────────────────────────────
     [
@@ -440,6 +444,8 @@ return [
                 return Helpers::forbidden('You are not allowed to delete this folder');
             }
 
+            $root = $folder->root();
+
             try {
                 $kirby->impersonate('kirby', function () use ($folder) {
                     $folder->delete(true);
@@ -447,6 +453,18 @@ return [
             } catch (\Throwable $e) {
                 error_log('[MediaHub] folder delete failed: ' . $e->getMessage());
                 return ['status' => 'error', 'message' => 'Operation failed.'];
+            }
+
+            // Kirby only removes the directory when it ends up empty. Orphaned
+            // sidecars ("photo.jpg.txt" without "photo.jpg", left by older
+            // versions' WebP conversion) kept it alive, so the folder stayed
+            // listed until a second delete. Clean those up, then verify.
+            if (is_dir($root)) {
+                $left = Helpers::removeOrphanSidecars($root);
+                if (is_dir($root)) {
+                    error_log('[MediaHub] folder delete incomplete, remaining: ' . implode(', ', $left));
+                    return ['status' => 'error', 'message' => 'The folder could not be fully deleted. Remaining: ' . implode(', ', array_slice($left, 0, 5))];
+                }
             }
 
             return ['status' => 'ok'];
@@ -1184,3 +1202,10 @@ return [
     ],
 
 ];
+
+return Helpers::guardAreaAccess($routes, [
+    // used by the mediahubpicker field on any page — not Media Hub management
+    'GET media-hub/picker',
+    'GET media-hub/files/(:any)',
+    'PATCH media-hub/files/(:any)/update',
+]);

@@ -102,13 +102,18 @@ App::plugin(
                         },
                     ],
 
-                    // Folder view
+                    // Folder view — /media-hub/photos or /media-hub/photos/2024
+                    // (registered after 'media-hub/license', which wins for that exact path)
                     [
-                        'pattern' => 'media-hub/(:any)',
-                        'action'  => function (string $folderSlug) use ($slug) {
+                        'pattern' => 'media-hub/(:all)',
+                        'action'  => function (string $folderPath) use ($slug) {
                             $kirby  = App::instance();
                             $root   = $kirby->page($slug);
-                            $folder = $root ? $kirby->page($slug . '/' . $folderSlug) : null;
+                            $folder = $root && \Kirbycode\MediaHub\Api\Helpers::validatePath($folderPath, $slug)
+                                ? $kirby->page($slug . '/' . $folderPath)
+                                : null;
+                            // Unknown/invalid path → behave like the main view
+                            $folderPath = $folder ? $folderPath : null;
                             $apiUrl = $kirby->url('api') . '/media-hub';
 
                             $folders = [];
@@ -141,9 +146,10 @@ App::plugin(
                                 'title'     => $folder ? $folder->title()->value() : 'Media Hub',
                                 'props'     => [
                                     'folders'       => $folders,
-                                    'currentFolder' => $folderSlug,
+                                    'currentFolder' => $folderPath,
                                     'apiUrl'        => $apiUrl,
-                                    'uploadApiBase' => 'pages/' . $slug . '+' . $folderSlug,
+                                    // Always the root: the view appends the active folder itself
+                                    'uploadApiBase' => 'pages/' . $slug,
                                     'isPro'           => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
                                     'isAdmin'         => $kirby->user() ? $kirby->user()->isAdmin() : false,
                                     'updateAvailable' => ($updateLatest = \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion()) !== null,
@@ -220,11 +226,21 @@ App::plugin(
             // Convert to WebP and compress — V2 Pro feature
             if (\Kirbycode\MediaHub\Licensing\LicenseManager::isPro()) {
                 try {
-                    \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimizeOnUpload($working);
+                    $result = \Kirbycode\MediaHub\Optimization\MediaOptimizer::optimizeOnUpload($working);
+                    if (!empty($result['converted']) && !empty($result['newId'])) {
+                        $working = $kirby->file($result['newId']) ?? $working;
+                    }
                 } catch (\Throwable $e) {
                     // non-critical — never break the upload
                 }
             }
+
+            // Kirby uses an after-hook's return value as the result of createFile().
+            // Returning the final (renamed) file keeps the upload API response on
+            // the real .webp. Otherwise Kirby serialises the stale .jpg object, which
+            // writes an orphan "<name>.jpg.txt" (Uuid + Template only) next to the
+            // .webp — and that orphan made folder deletes need a second attempt.
+            return $working;
         },
     ],
 

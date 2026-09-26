@@ -9,22 +9,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### Security
-
-- **Folder creation respects Kirby permissions** — `POST media-hub/folders` was open to every Panel user. It now requires the current user to be allowed to create `media-hub-folder` pages (role permissions + blueprint options).
-- **No more permission bypass via the `kirby` user** — folder delete, bulk move, bulk rename, bulk tag and global tag delete now check the real user's Kirby permissions (`delete`, `create`, `changeName`, `update`) per file/folder before running. Files the user may not change are reported in `errors` instead of being modified.
-- **Upload hook scoped exactly to the Media Hub** — `file.create:after` used a prefix match, so uploads to pages like `media-hub-docs` were stamped and sent to the optimizer. Now uses an exact boundary check (same fix in the unused-files scan).
-- **Upload whitelist** — the `media-hub-asset` file blueprint now accepts only common image, document, video and audio extensions (scripts and markup such as `.js`/`.xml` are rejected). Override with the `kirbycode.media-hub.accept` option.
-
-### Fixed
-
-- **Bulk rename** — rejects a pattern without `{n}` when renaming several files (every file got the same name, all but the first failed).
-- **Global tag delete** — one failing file no longer aborts the whole request with a 500; failures are returned in `errors`.
-- **Bulk move** — skips files whose name already exists in the target folder instead of failing mid-copy.
-
 ---
 
 ## [1.3.0] — 2026-09-26
+
+### Upgrade notes
+
+- **Upload whitelist:** uploads to the Media Hub are now limited to common image, document, video, audio, archive and design formats (see README → Supported File Types). If your editors upload other types, set `kirbycode.media-hub.accept` in `config.php`.
+- **Area access is enforced in the API:** roles with `access: media-hub: false` can no longer use the Media Hub API (the picker field keeps working). Roles without that setting are unaffected.
+- **Stray `name.jpg.txt` files** created by earlier versions are removed automatically when their folder is deleted.
 
 ### Added
 
@@ -37,6 +30,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - **Metadata editing permission** — `PATCH media-hub/files/…/update` now allows any user whose Kirby role may update files (previously admins only). The update runs as the current user so Kirby's own file rules apply. Delete and bulk operations remain admin-only.
 - Metadata values are type-checked before saving (strings only; `aigenerated` normalised to a boolean).
+
+### Security
+
+- **Folder creation respects Kirby permissions** — `POST media-hub/folders` was open to every Panel user. It now requires the current user to be allowed to create `media-hub-folder` pages (role permissions + blueprint options).
+- **No more permission bypass via the `kirby` user** — folder delete, bulk move, bulk rename, bulk tag and global tag delete now check the real user's Kirby permissions (`delete`, `create`, `changeName`, `update`) per file/folder before running. Files the user may not change are reported in `errors` instead of being modified.
+- **Upload hook scoped exactly to the Media Hub** — `file.create:after` used a prefix match, so uploads to pages like `media-hub-docs` were stamped and sent to the optimizer. Now uses an exact boundary check (same fix in the unused-files scan).
+- **Media Hub area permission enforced in the API** — a role with `access: media-hub: false` could not open the Media Hub in the Panel, but could still list files, create folders and run other actions through `/api/media-hub/*`. All API routes now require access to the area, except the three the page picker field uses (`GET media-hub/picker`, `GET media-hub/files/…`, `PATCH media-hub/files/…/update`), which stay governed by Kirby's file permissions. New routes are protected by default.
+- **Upload whitelist** — the `media-hub-asset` file blueprint now accepts only common image, document, video and audio extensions (scripts and markup such as `.js`/`.xml` are rejected). Override with the `kirbycode.media-hub.accept` option.
+
+### Fixed
+
+- **Folders needed two deletes after JPG/PNG uploads** — the upload hook converted the file to WebP but Kirby still answered the upload with the old `.jpg` object, which wrote an orphaned `name.jpg.txt` next to the `.webp`. Kirby then treated that orphan as the folder's content file, so the first delete only removed the orphan (and the files) and left the folder. The hook now returns the converted file (Kirby uses an after-hook's return value as the upload result), so no orphan is created and the upload response reports the `.webp` name. Folder delete also cleans up orphans left by earlier versions and only reports success once the folder is really gone; the Panel now shows the error if it is not.
+- **Uploads failed when the Media Hub was opened on a folder URL** — on `/panel/media-hub/photos` uploads went to `media-hub+photos+photos` (and to the wrong parent after clicking another folder). The upload base is now always the Media Hub root.
+- **Selected folder kept in the URL** — clicking a folder updates the address bar, so reloading or sharing the link opens the same folder. Subfolder URLs (`/panel/media-hub/events/2024`) are supported; unknown or invalid paths fall back to the main view.
+- **Bulk rename** — rejects a pattern without `{n}` when renaming several files (every file got the same name, all but the first failed).
+- **Global tag delete** — one failing file no longer aborts the whole request with a 500; failures are returned in `errors`.
+- **Bulk move** — skips files whose name already exists in the target folder instead of failing mid-copy.
 
 ---
 

@@ -77,6 +77,87 @@ class Helpers
         ]), 'create');
     }
 
+    /**
+     * Honour the Panel area permission (`access: media-hub: false` in a user
+     * blueprint). Kirby only enforces it for Panel views, not for plugin API
+     * routes, so the routes check it themselves.
+     */
+    public static function requireAreaAccess(): ?Response
+    {
+        $user = App::instance()->user();
+        if ($user === null || \Kirby\Panel\Panel::hasAccess($user, 'media-hub') !== true) {
+            return self::forbidden('You do not have access to the Media Hub');
+        }
+        return null;
+    }
+
+    /**
+     * Wraps every route action with requireAreaAccess(), except the patterns
+     * in $open. New routes are therefore protected by default.
+     */
+    public static function guardAreaAccess(array $routes, array $open): array
+    {
+        foreach ($routes as $i => $route) {
+            if (in_array($route['method'] . ' ' . $route['pattern'], $open, true)) {
+                continue;
+            }
+            $action = $route['action'];
+            // Fully-qualified names only: Kirby runs route actions via
+            // Closure::call($api), which rebinds scope — `self::` would then
+            // resolve to Kirby\Api\Api. The inner action keeps the same $this.
+            $routes[$i]['action'] = function (...$args) use ($action) {
+                if ($guard = \Kirbycode\MediaHub\Api\Helpers::requireAreaAccess()) return $guard;
+                return $action->call($this, ...$args);
+            };
+        }
+        return $routes;
+    }
+
+    /**
+     * Cleans up what Kirby leaves behind when deleting a Media Hub folder that
+     * contains orphaned sidecars ("name.ext.txt" whose "name.ext" is gone).
+     *
+     * Kirby picks such an orphan as the folder's content file, so its delete
+     * removes the orphan and leaves the real "media-hub-folder.txt". This
+     * recursively deletes orphaned sidecars and leftover media-hub-folder
+     * content files (incl. language variants), then removes directories that
+     * became empty. Nothing else is touched. Returns the paths (relative to
+     * $dir) of anything that is left.
+     */
+    public static function removeOrphanSidecars(string $dir): array
+    {
+        $left = [];
+        foreach (scandir($dir) ?: [] as $name) {
+            if ($name === '.' || $name === '..') continue;
+            $path = $dir . '/' . $name;
+
+            if (is_dir($path)) {
+                foreach (self::removeOrphanSidecars($path) as $sub) {
+                    $left[] = $name . '/' . $sub;
+                }
+                continue;
+            }
+
+            // "photo.jpg.txt" is a sidecar of "photo.jpg"; plain "folder.txt" is not
+            $media = substr($path, 0, -4);
+            $isOrphanSidecar = str_ends_with($name, '.txt')
+                && pathinfo(substr($name, 0, -4), PATHINFO_EXTENSION) !== ''
+                && !file_exists($media);
+
+            $isFolderContent = preg_match('/^media-hub-folder(\.[a-z]{2,3}(-[a-z]{2,4})?)?\.txt$/i', $name) === 1;
+
+            if (!($isOrphanSidecar || $isFolderContent) || !@unlink($path)) {
+                $left[] = $name;
+            }
+        }
+
+        if ($left === []) {
+            @rmdir($dir);
+        }
+
+        return $left;
+    }
+
     public static function forbidden(string $message = 'You are not allowed to do this'): Response
     {
         return Response::json(['status' => 'error', 'message' => $message], 403);

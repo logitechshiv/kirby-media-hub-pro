@@ -55,6 +55,10 @@ window.panel.plugin('kirbycode/media-hub', {
       },
 
       created() {
+        // Opened directly on a subfolder URL → show its parent expanded
+        if (this.activeFolderPath && this.activeFolderPath.includes('/')) {
+          this.expandedFolders.push(this.activeFolderPath.split('/')[0]);
+        }
         this.loadFiles();
         this.loadFolders();
         this.loadTags();
@@ -154,10 +158,25 @@ window.panel.plugin('kirbycode/media-hub', {
           }
         },
 
+        // Keep the address bar in sync so reloads and shared links open the same folder.
+        // replaceState keeps Kirby's history state object, so the Panel router is unaffected.
+        syncFolderUrl(path) {
+          try {
+            const segments = path ? path.split('/').map(encodeURIComponent) : [];
+            const url      = [this.panelUrl, 'media-hub', ...segments].join('/');
+            if (url !== window.location.pathname) {
+              window.history.replaceState(window.history.state, '', url + window.location.search);
+            }
+          } catch (e) {
+            // non-critical — navigation still works without the URL update
+          }
+        },
+
         selectFolder(path) {
           this.activeFolderPath = path;
           this.activeFile       = null;
           this.pagination.page  = 1;
+          this.syncFolderUrl(path);
           if (path && path.includes('/')) {
             const parent = path.split('/')[0];
             if (!this.expandedFolders.includes(parent)) {
@@ -301,20 +320,26 @@ window.panel.plugin('kirbycode/media-hub', {
           if (!confirm('Delete folder "' + folder.title + '" and all its files?')) return;
           const encodedPath = encodeURIComponent(folder.path).replace(/%2F/g, '+');
           try {
-            await this.$panel.api.delete('media-hub/folders/' + encodedPath);
+            const res = await this.$panel.api.delete('media-hub/folders/' + encodedPath);
+            if (res && res.status === 'error') {
+              // The request succeeded but the folder was not (fully) removed
+              await this.loadFolders();
+              this.$panel.notification.error(res.message || 'Could not delete folder');
+              return;
+            }
             await this.loadFolders();
             this.statsRefreshKey++;
             if (this.activeFolderPath === folder.path ||
                 (this.activeFolderPath && this.activeFolderPath.startsWith(folder.path + '/'))) {
               this.activeFolderPath = null;
+              this.syncFolderUrl(null);
               this.loadFiles();
             }
             this.$panel.notification.success('Folder deleted');
           } catch (e) {
-            const msg = e.status === 403 || e.code === 403
-              ? 'Only administrators can delete folders.'
-              : 'Could not delete folder: ' + (e.message || e);
-            this.$panel.notification.error(msg);
+            // 403 can mean: not admin, no Media Hub access, or no delete permission —
+            // the server message says which
+            this.$panel.notification.error('Could not delete folder: ' + (e.message || e));
           }
         },
 
