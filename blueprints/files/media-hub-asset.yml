@@ -1,5 +1,44 @@
 title: Media Hub Asset
 
+# Upload whitelist — scripts/markup (js, xml, html, php…) are never accepted.
+# Override per site with the `kirbycode.media-hub.accept` option.
+accept:
+  extension:
+    - jpg
+    - jpeg
+    - png
+    - gif
+    - webp
+    - avif
+    - svg
+    - pdf
+    - doc
+    - docx
+    - xls
+    - xlsx
+    - ppt
+    - pptx
+    - odt
+    - ods
+    - odp
+    - txt
+    - csv
+    - zip
+    - gz
+    - tar
+    - ai
+    - eps
+    - psd
+    - mp4
+    - webm
+    - mov
+    - m4v
+    - avi
+    - mp3
+    - wav
+    - ogg
+    - m4a
+
 fields:
   title:
     label: Title

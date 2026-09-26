@@ -200,6 +200,8 @@ Enable **Select mode** in the toolbar to check multiple files, then choose an ac
 | **Bulk Rename** | Renames using a pattern, e.g. `photo-{n}` → `photo-1.jpg`, `photo-2.jpg` |
 | **Bulk Tag** | Add / Remove / Replace tags on all selected files at once |
 
+Every action also checks the user's Kirby permissions per file (role + blueprint options): e.g. a role with `files.delete: false` cannot delete or move files, and those files are listed as errors instead of being changed.
+
 ---
 
 ## Duplicate Detection (V2)
@@ -218,11 +220,20 @@ For each group you can: keep the oldest, keep the newest, keep the shortest file
 | Category | Extensions |
 |----------|-----------|
 | Images | jpg, jpeg, png, gif, webp, svg, avif |
-| Documents | pdf, doc, docx, xls, xlsx, ppt, pptx, txt |
-| Video | mp4, mov, webm, avi |
+| Documents | pdf, doc, docx, xls, xlsx, ppt, pptx, odt, ods, odp, txt, csv |
+| Video | mp4, mov, m4v, webm, avi |
 | Audio | mp3, wav, ogg, m4a |
 | Archives | zip, gz, tar |
 | Design | ai, eps, psd |
+
+Uploads with any other extension are rejected (scripts and markup such as `.js`, `.xml` or `.html` can never be uploaded). To change the list, set `kirbycode.media-hub.accept` — it replaces the file blueprint's [`accept`](https://getkirby.com/docs/reference/panel/blueprints/file#accept) option:
+
+```php
+'kirbycode.media-hub.accept' => [
+    'extension' => ['jpg', 'jpeg', 'png', 'webp', 'svg', 'pdf', 'mp4'],
+    'maxsize'   => 10 * 1024 * 1024, // 10 MB
+],
+```
 
 ---
 

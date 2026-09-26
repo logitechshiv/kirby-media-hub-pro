@@ -9,6 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Security
+
+- **Folder creation respects Kirby permissions** — `POST media-hub/folders` was open to every Panel user. It now requires the current user to be allowed to create `media-hub-folder` pages (role permissions + blueprint options).
+- **No more permission bypass via the `kirby` user** — folder delete, bulk move, bulk rename, bulk tag and global tag delete now check the real user's Kirby permissions (`delete`, `create`, `changeName`, `update`) per file/folder before running. Files the user may not change are reported in `errors` instead of being modified.
+- **Upload hook scoped exactly to the Media Hub** — `file.create:after` used a prefix match, so uploads to pages like `media-hub-docs` were stamped and sent to the optimizer. Now uses an exact boundary check (same fix in the unused-files scan).
+- **Upload whitelist** — the `media-hub-asset` file blueprint now accepts only common image, document, video and audio extensions (scripts and markup such as `.js`/`.xml` are rejected). Override with the `kirbycode.media-hub.accept` option.
+
+### Fixed
+
+- **Bulk rename** — rejects a pattern without `{n}` when renaming several files (every file got the same name, all but the first failed).
+- **Global tag delete** — one failing file no longer aborts the whole request with a 500; failures are returned in `errors`.
+- **Bulk move** — skips files whose name already exists in the target folder instead of failing mid-copy.
+
 ---
 
 ## [1.3.0] — 2026-09-26

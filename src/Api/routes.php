@@ -364,8 +364,19 @@ return [
 
             $folderSlug = Str::slug($title);
 
+            if ($folderSlug === '') {
+                return ['status' => 'error', 'message' => 'Invalid folder name'];
+            }
+
             if ($parent->findPageOrDraft($folderSlug)) {
                 return ['status' => 'error', 'message' => 'A folder with that name already exists'];
+            }
+
+            // Real user must be allowed to create pages here (role + blueprint).
+            // Checked before impersonating: the kirby user bypasses all permissions,
+            // which is still needed to list the folder (its blueprint locks changeStatus).
+            if (!Helpers::canCreatePage($parent, $folderSlug, 'media-hub-folder')) {
+                return ['status' => 'error', 'message' => 'You are not allowed to create folders'];
             }
 
             try {
@@ -423,6 +434,10 @@ return [
 
             if (!$folder) {
                 return ['status' => 'error', 'message' => 'Folder not found'];
+            }
+
+            if (!Helpers::can($folder, 'delete')) {
+                return Helpers::forbidden('You are not allowed to delete this folder');
             }
 
             try {
@@ -569,7 +584,7 @@ return [
                 $needle = 'file://' . $file->uuid()->id();
                 $used   = false;
                 foreach ($kirby->site()->index() as $p) {
-                    if (str_starts_with($p->id(), $slug)) continue;
+                    if (Helpers::isInsideRoot($p->id(), $slug)) continue;
                     foreach ($p->content()->fields() as $fieldObj) {
                         if (str_contains((string) $fieldObj->value(), $needle)) {
                             $used = true;
@@ -833,18 +848,28 @@ return [
             }
 
             $updated = 0;
-            $kirby->impersonate('kirby', function () use ($allFiles, $tag, &$updated) {
-                foreach ($allFiles as $file) {
-                    $raw      = (string) $file->content()->get('tags')->value();
-                    $existing = array_filter(array_map('trim', explode(',', $raw)));
-                    if (!in_array($tag, $existing, true)) continue;
-                    $newTags  = array_values(array_filter($existing, fn($t) => $t !== $tag));
-                    $file->update(['tags' => implode(', ', $newTags)]);
-                    $updated++;
-                }
-            });
+            $errors  = [];
+            foreach ($allFiles as $file) {
+                $raw      = (string) $file->content()->get('tags')->value();
+                $existing = array_filter(array_map('trim', explode(',', $raw)));
+                if (!in_array($tag, $existing, true)) continue;
 
-            return ['status' => 'ok', 'data' => ['updated' => $updated, 'tag' => $tag]];
+                if (!Helpers::can($file, 'update')) {
+                    $errors[] = $file->filename() . ': permission denied';
+                    continue;
+                }
+
+                $newTags = array_values(array_filter($existing, fn($t) => $t !== $tag));
+                try {
+                    $kirby->impersonate('kirby', fn () => $file->update(['tags' => implode(', ', $newTags)]));
+                    $updated++;
+                } catch (\Throwable $e) {
+                    error_log('[MediaHub] tag delete failed for ' . $file->filename() . ': ' . $e->getMessage());
+                    $errors[] = $file->filename() . ': operation failed';
+                }
+            }
+
+            return ['status' => 'ok', 'data' => ['updated' => $updated, 'tag' => $tag], 'errors' => $errors];
         },
     ],
 
@@ -913,6 +938,16 @@ return [
                 if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
                 if ($file->parent()->id() === $target->id()) { $moved++; continue; }
 
+                // A move is create-in-target + delete-in-source for the real user
+                if (!Helpers::can($file, 'delete') || !Helpers::canCreateFile($target, $file->filename())) {
+                    $errors[] = $file->filename() . ': permission denied';
+                    continue;
+                }
+                if ($target->file($file->filename())) {
+                    $errors[] = $file->filename() . ': a file with this name already exists in the target folder';
+                    continue;
+                }
+
                 try {
                     $kirby->impersonate('kirby', function () use ($file, $target) {
                         $content = $file->content()->toArray();
@@ -956,6 +991,9 @@ return [
             if ($pattern === '') {
                 return ['status' => 'error', 'message' => 'Pattern is required'];
             }
+            if (count($ids) > 1 && !str_contains($pattern, '{n}')) {
+                return ['status' => 'error', 'message' => 'Pattern must contain {n} when renaming several files'];
+            }
 
             $renamed = 0;
             $errors  = [];
@@ -968,6 +1006,7 @@ return [
 
                 $newSlug = Str::slug(str_replace('{n}', $i, $pattern));
                 if ($newSlug === '') { $errors[] = $file->filename() . ': empty slug'; $i++; continue; }
+                if (!Helpers::can($file, 'changeName')) { $errors[] = $file->filename() . ': permission denied'; $i++; continue; }
 
                 try {
                     $kirby->impersonate('kirby', function () use ($file, $newSlug) {
@@ -1006,6 +1045,7 @@ return [
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
                 $file = Helpers::loadScopedFile($id, $slug);
                 if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
+                if (!Helpers::can($file, 'update')) { $errors[] = $file->filename() . ': permission denied'; continue; }
 
                 $raw      = (string) $file->content()->get('tags')->value();
                 $existing = $raw !== '' ? array_map('trim', explode(',', $raw)) : [];

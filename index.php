@@ -172,7 +172,16 @@ App::plugin(
     'blueprints' => [
         'pages/media-hub'        => __DIR__ . '/blueprints/pages/media-hub.yml',
         'pages/media-hub-folder' => __DIR__ . '/blueprints/pages/media-hub-folder.yml',
-        'files/media-hub-asset'  => __DIR__ . '/blueprints/files/media-hub-asset.yml',
+        // Callable so sites can replace the upload whitelist:
+        // 'kirbycode.media-hub.accept' => ['extension' => ['jpg', 'png'], 'maxsize' => 10485760]
+        'files/media-hub-asset'  => function () {
+            $blueprint = \Kirby\Data\Yaml::read(__DIR__ . '/blueprints/files/media-hub-asset.yml');
+            $accept    = App::instance()->option('kirbycode.media-hub.accept');
+            if (is_array($accept) || is_string($accept)) {
+                $blueprint['accept'] = $accept;
+            }
+            return $blueprint;
+        },
     ],
 
     // ── Hooks ───────────────────────────────────────────────────────────────
@@ -185,7 +194,11 @@ App::plugin(
         'file.create:after' => function ($file) {
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
-            if (!str_starts_with($file->parent()->id(), $slug)) {
+            // Exact boundary check — a plain prefix match would also catch pages
+            // like 'media-hub-docs' and convert their uploads
+            $parent = $file->parent();
+            if (!$parent instanceof \Kirby\Cms\Page
+                || !\Kirbycode\MediaHub\Api\Helpers::isInsideRoot($parent->id(), $slug)) {
                 return;
             }
             $user = $kirby->user();

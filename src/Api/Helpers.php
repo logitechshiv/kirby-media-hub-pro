@@ -4,6 +4,8 @@ namespace Kirbycode\MediaHub\Api;
 
 use Kirby\Cms\App;
 use Kirby\Cms\File;
+use Kirby\Cms\ModelWithContent;
+use Kirby\Cms\Page;
 use Kirby\Http\Response;
 
 class Helpers
@@ -30,6 +32,54 @@ class Helpers
             ], 403);
         }
         return null;
+    }
+
+    /**
+     * Whether the CURRENT (real) user may perform $action on $model, honouring
+     * both the role permissions and the model's blueprint options.
+     *
+     * Always call this before any impersonate('kirby') block — the almighty
+     * kirby user skips all of these checks.
+     */
+    public static function can(ModelWithContent $model, string $action): bool
+    {
+        try {
+            return $model->permissions()->can($action) === true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether the current user may create a file with the given template in $parent.
+     * Uses an unsaved model so the file blueprint's `create` option is evaluated.
+     */
+    public static function canCreateFile(Page $parent, string $filename, string $template = 'media-hub-asset'): bool
+    {
+        return self::can(File::factory([
+            'filename' => $filename,
+            'parent'   => $parent,
+            'template' => $template,
+        ]), 'create');
+    }
+
+    /**
+     * Whether the current user may create a child page with the given template.
+     */
+    public static function canCreatePage(Page $parent, string $slug, string $template): bool
+    {
+        return self::can(Page::factory([
+            'slug'     => $slug,
+            'template' => $template,
+            'model'    => $template,
+            'parent'   => $parent,
+            'isDraft'  => true,
+        ]), 'create');
+    }
+
+    public static function forbidden(string $message = 'You are not allowed to do this'): Response
+    {
+        return Response::json(['status' => 'error', 'message' => $message], 403);
     }
 
     public static function validatePath(string $path, string $root): bool
