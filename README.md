@@ -23,7 +23,8 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 - **Drag-and-drop upload** — upload files directly to any folder
 - **Full-text search** — searches filename, title, alt text, description, copyright, and photographer simultaneously
 - **File metadata** — edit title, alt text, description, copyright, photographer, and upload date per file
-- **`mediahubpicker` field** — custom field type for any blueprint; works inside structure fields
+- **`mediahubpicker` field** — custom field type for any blueprint; opens the library in a modal (works inside block and structure drawers)
+- **Edit metadata from the page** — click a file in the picker (or ✎ on a selected file) to edit title, alt text, description and tags without leaving the page; images without alt text are flagged with an ALT badge. Any user whose Kirby role may update files can save metadata
 - **UUID-based references** — saved as `file://uuid` — identical format to Kirby's native `files` field
 - **Usage tracking** — see every page that references a given file
 - **Dashboard stats** — total files, unused files, type breakdown, recent uploads, largest files

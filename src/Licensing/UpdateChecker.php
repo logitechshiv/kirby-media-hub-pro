@@ -6,7 +6,7 @@ use Kirby\Cms\App;
 
 class UpdateChecker
 {
-    const CURRENT_VERSION = '1.2.1';
+    const CURRENT_VERSION = '1.3.0';
     const PACKAGIST_URL   = 'https://repo.packagist.org/p2/kirbycode/media-hub-pro.json';
     const CACHE_KEY       = 'update-check';
     const CACHE_TTL       = 1440; // 1 day in minutes

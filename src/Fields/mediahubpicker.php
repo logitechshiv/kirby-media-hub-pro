@@ -82,6 +82,7 @@ return [
                     'thumb'    => $thumb,
                     'type'     => $file->type(),
                     'title'    => (string) $file->content()->get('title')->or($file->filename())->value(),
+                    'alt'      => (string) $file->content()->get('alt')->value(),
                 ];
             }
 

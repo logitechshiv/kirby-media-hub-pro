@@ -1205,6 +1205,217 @@ window.panel.plugin('kirbycode/media-hub', {
     },
 
     // ── File detail side panel ─────────────────────────────────────────────
+    // ── Metadata form (shared by the Media Hub detail panel and the picker modal) ──
+    'k-media-hub-meta-form': {
+      props: {
+        file:     { type: Object,  required: true },
+        allTags:  { type: Array,   default: () => [] },
+        readonly: { type: Boolean, default: false },
+      },
+      emits: ['saved'],
+
+      data() {
+        return {
+          form:     this.formFrom(this.file),
+          tagInput: '',
+          saving:   false,
+        };
+      },
+
+      watch: {
+        file(newFile) {
+          this.form     = this.formFrom(newFile);
+          this.tagInput = '';
+        },
+      },
+
+      computed: {
+        encodedId() {
+          return encodeURIComponent(this.file.id).replace(/%2F/g, '+');
+        },
+        // Unique per instance — the page view and the picker modal can both be mounted
+        datalistId() {
+          return 'k-media-hub-tag-suggestions-' + this._uid;
+        },
+      },
+
+      methods: {
+        formFrom(file) {
+          return {
+            title:        file.title        || '',
+            alt:          file.alt          || '',
+            description:  file.description  || '',
+            copyright:    file.copyright    || '',
+            photographer: file.photographer || '',
+            aigenerated:  file.aigenerated  || false,
+            tags:         [...(file.tags    || [])],
+          };
+        },
+
+        addTag() {
+          const tag = this.tagInput.trim().replace(/,\s*$/, '').trim();
+          if (tag && !this.form.tags.includes(tag)) {
+            this.form.tags.push(tag);
+          }
+          this.tagInput = '';
+        },
+
+        removeTag(idx) {
+          this.form.tags.splice(idx, 1);
+        },
+
+        async saveMetadata() {
+          if (this.readonly) return;
+          // Auto-flush any text currently in the tag input before saving
+          if (this.tagInput.trim()) {
+            this.addTag();
+          }
+          this.saving = true;
+          try {
+            const payload = { ...this.form, tags: this.form.tags.join(', ') };
+            await this.$panel.api.patch(
+              'media-hub/files/' + this.encodedId + '/update',
+              payload
+            );
+            this.$panel.notification.success('Saved');
+            this.$emit('saved', { ...this.file, ...this.form, tags: [...this.form.tags] });
+          } catch (e) {
+            this.$panel.notification.error('Save failed: ' + (e.message || e));
+          } finally {
+            this.saving = false;
+          }
+        },
+      },
+
+      template: `
+        <form class="k-media-hub-detail-form" @submit.prevent="saveMetadata">
+          <fieldset :disabled="readonly || saving" class="k-media-hub-meta-fieldset">
+            <label class="k-media-hub-field">
+              <span>Title</span>
+              <input v-model="form.title" type="text" class="k-media-hub-input" placeholder="File title…" />
+            </label>
+            <label class="k-media-hub-field">
+              <span>Alt Text</span>
+              <input v-model="form.alt" type="text" class="k-media-hub-input" placeholder="Describe the image…" />
+            </label>
+            <label class="k-media-hub-field">
+              <span>Description</span>
+              <textarea v-model="form.description" class="k-media-hub-input k-media-hub-textarea" rows="3" placeholder="Optional description…"></textarea>
+            </label>
+            <div class="k-media-hub-field-row">
+              <label class="k-media-hub-field">
+                <span>Copyright</span>
+                <input v-model="form.copyright" type="text" class="k-media-hub-input" placeholder="© …" />
+              </label>
+              <label class="k-media-hub-field">
+                <span>Photographer</span>
+                <input v-model="form.photographer" type="text" class="k-media-hub-input" placeholder="Name…" />
+              </label>
+            </div>
+            <label class="k-media-hub-field k-media-hub-field--checkbox">
+              <span>AI-Generated</span>
+              <span class="k-media-hub-toggle">
+                <input v-model="form.aigenerated" type="checkbox" class="k-media-hub-toggle-input" />
+                <span class="k-media-hub-toggle-track"></span>
+              </span>
+            </label>
+            <div class="k-media-hub-field">
+              <span>Tags</span>
+              <div class="k-media-hub-tags-editor">
+                <div v-if="form.tags.length" class="k-media-hub-tag-chips">
+                  <span v-for="(tag, i) in form.tags" :key="i" class="k-media-hub-tag-chip">
+                    {{ tag }}
+                    <button v-if="!readonly" type="button" @click.prevent="removeTag(i)" title="Remove tag">×</button>
+                  </span>
+                </div>
+                <input
+                  v-if="!readonly"
+                  v-model="tagInput"
+                  type="text"
+                  class="k-media-hub-input k-media-hub-tag-add-input"
+                  placeholder="Add tag and press Enter…"
+                  :list="datalistId"
+                  @keydown.enter.prevent="addTag"
+                />
+                <datalist :id="datalistId">
+                  <option v-for="t in allTags" :key="t" :value="t" />
+                </datalist>
+              </div>
+            </div>
+          </fieldset>
+          <p v-if="readonly" class="k-media-hub-meta-readonly">You don't have permission to edit this file's metadata.</p>
+          <button
+            v-else
+            type="submit"
+            class="k-media-hub-btn k-media-hub-btn--primary k-media-hub-btn--full"
+            :disabled="saving"
+          >{{ saving ? 'Saving…' : 'Save Metadata' }}</button>
+        </form>
+      `,
+    },
+
+    // ── Native <dialog> modal ──────────────────────────────────────────────
+    // Uses showModal() so it joins the browser top layer. Kirby 5 drawers are
+    // also top-layer <dialog>s; a fixed/teleported overlay would sit behind them
+    // and be inert. A dialog opened later stacks above and stays interactive.
+    'k-media-hub-modal': {
+      props: {
+        open: { type: Boolean, default: false },
+      },
+      emits: ['close'],
+
+      watch: {
+        open(val) {
+          this.sync(val);
+        },
+      },
+
+      mounted() {
+        this.sync(this.open);
+      },
+
+      beforeDestroy() {
+        const d = this.$refs.dialog;
+        if (d && d.open) d.close();
+      },
+
+      methods: {
+        sync(val) {
+          const d = this.$refs.dialog;
+          if (!d) return;
+          if (val && !d.open) d.showModal();
+          if (!val && d.open) d.close();
+        },
+
+        // Esc: native 'cancel' fires on the topmost dialog only.
+        // Prevent the default close so the parent always drives `open`.
+        onCancel(e) {
+          e.preventDefault();
+          this.$emit('close');
+        },
+
+        // Clicks on the dialog element itself (not its content) = backdrop
+        onClick(e) {
+          if (e.target === this.$refs.dialog) this.$emit('close');
+        },
+      },
+
+      template: `
+        <dialog
+          ref="dialog"
+          class="k-media-hub-modal"
+          @cancel="onCancel"
+          @click="onClick"
+          @keydown.esc.stop
+          @mousedown.stop
+        >
+          <div v-if="open" class="k-media-hub-modal-box">
+            <slot />
+          </div>
+        </dialog>
+      `,
+    },
+
     'k-media-hub-file-detail': {
       props: {
         file:    { type: Object,  required: true },
@@ -1216,17 +1427,6 @@ window.panel.plugin('kirbycode/media-hub', {
 
       data() {
         return {
-          form: {
-            title:        this.file.title        || '',
-            alt:          this.file.alt          || '',
-            description:  this.file.description  || '',
-            copyright:    this.file.copyright    || '',
-            photographer: this.file.photographer || '',
-            aigenerated:  this.file.aigenerated   || false,
-            tags:         [...(this.file.tags    || [])],
-          },
-          tagInput:   '',
-          saving:     false,
           deleting:   false,
           optimizing: false,
           usageOpen:    false,
@@ -1238,17 +1438,7 @@ window.panel.plugin('kirbycode/media-hub', {
       },
 
       watch: {
-        file(newFile) {
-          this.form = {
-            title:        newFile.title        || '',
-            alt:          newFile.alt          || '',
-            description:  newFile.description  || '',
-            copyright:    newFile.copyright    || '',
-            photographer: newFile.photographer || '',
-            aigenerated:  newFile.aigenerated   || false,
-            tags:         [...(newFile.tags    || [])],
-          };
-          this.tagInput    = '';
+        file() {
           this.usageOpen   = false;
           this.usageLoaded = false;
           this.usageCount  = '?';
@@ -1263,39 +1453,6 @@ window.panel.plugin('kirbycode/media-hub', {
       },
 
       methods: {
-        addTag() {
-          const tag = this.tagInput.trim().replace(/,\s*$/, '').trim();
-          if (tag && !this.form.tags.includes(tag)) {
-            this.form.tags.push(tag);
-          }
-          this.tagInput = '';
-        },
-
-        removeTag(idx) {
-          this.form.tags.splice(idx, 1);
-        },
-
-        async saveMetadata() {
-          // Auto-flush any text currently in the tag input before saving
-          if (this.tagInput.trim()) {
-            this.addTag();
-          }
-          this.saving = true;
-          try {
-            const payload = { ...this.form, tags: this.form.tags.join(', ') };
-            await this.$panel.api.patch(
-              'media-hub/files/' + this.encodedId + '/update',
-              payload
-            );
-            this.$panel.notification.success('Saved');
-            this.$emit('updated', { ...this.file, ...this.form });
-          } catch (e) {
-            this.$panel.notification.error('Save failed: ' + (e.message || e));
-          } finally {
-            this.saving = false;
-          }
-        },
-
         async deleteFile() {
           if (!confirm('Delete "' + this.file.filename + '"? This cannot be undone.')) return;
           this.deleting = true;
@@ -1373,7 +1530,7 @@ window.panel.plugin('kirbycode/media-hub', {
           </div>
 
           <div class="k-media-hub-detail-preview">
-            <img v-if="file.type === 'image' && file.url" :src="file.url" :alt="form.alt" />
+            <img v-if="file.type === 'image' && file.url" :src="file.url" :alt="file.alt" />
             <div v-else class="k-media-hub-detail-icon">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </div>
@@ -1396,64 +1553,11 @@ window.panel.plugin('kirbycode/media-hub', {
           </div>
 
           <div class="k-media-hub-detail-section-heading">Metadata</div>
-          <form class="k-media-hub-detail-form" @submit.prevent="saveMetadata">
-            <label class="k-media-hub-field">
-              <span>Title</span>
-              <input v-model="form.title" type="text" class="k-media-hub-input" placeholder="File title…" />
-            </label>
-            <label class="k-media-hub-field">
-              <span>Alt Text</span>
-              <input v-model="form.alt" type="text" class="k-media-hub-input" placeholder="Describe the image…" />
-            </label>
-            <label class="k-media-hub-field">
-              <span>Description</span>
-              <textarea v-model="form.description" class="k-media-hub-input k-media-hub-textarea" rows="3" placeholder="Optional description…"></textarea>
-            </label>
-            <div class="k-media-hub-field-row">
-              <label class="k-media-hub-field">
-                <span>Copyright</span>
-                <input v-model="form.copyright" type="text" class="k-media-hub-input" placeholder="© …" />
-              </label>
-              <label class="k-media-hub-field">
-                <span>Photographer</span>
-                <input v-model="form.photographer" type="text" class="k-media-hub-input" placeholder="Name…" />
-              </label>
-            </div>
-            <label class="k-media-hub-field k-media-hub-field--checkbox">
-              <span>AI-Generated</span>
-              <span class="k-media-hub-toggle">
-                <input v-model="form.aigenerated" type="checkbox" class="k-media-hub-toggle-input" />
-                <span class="k-media-hub-toggle-track"></span>
-              </span>
-            </label>
-            <div class="k-media-hub-field">
-              <span>Tags</span>
-              <div class="k-media-hub-tags-editor">
-                <div v-if="form.tags.length" class="k-media-hub-tag-chips">
-                  <span v-for="(tag, i) in form.tags" :key="i" class="k-media-hub-tag-chip">
-                    {{ tag }}
-                    <button type="button" @click.prevent="removeTag(i)" title="Remove tag">×</button>
-                  </span>
-                </div>
-                <input
-                  v-model="tagInput"
-                  type="text"
-                  class="k-media-hub-input k-media-hub-tag-add-input"
-                  placeholder="Add tag and press Enter…"
-                  list="k-media-hub-tag-suggestions"
-                  @keydown.enter.prevent="addTag"
-                />
-                <datalist id="k-media-hub-tag-suggestions">
-                  <option v-for="t in allTags" :key="t" :value="t" />
-                </datalist>
-              </div>
-            </div>
-            <button
-              type="submit"
-              class="k-media-hub-btn k-media-hub-btn--primary k-media-hub-btn--full"
-              :disabled="saving"
-            >{{ saving ? 'Saving…' : 'Save Metadata' }}</button>
-          </form>
+          <k-media-hub-meta-form
+            :file="file"
+            :all-tags="allTags"
+            @saved="$emit('updated', $event)"
+          />
 
           <!-- Usage tracking -->
           <div class="k-media-hub-detail-section-heading">Usage</div>
@@ -1737,8 +1841,9 @@ window.panel.plugin('kirbycode/media-hub', {
     },
 
     // ── Media Hub Picker field component ───────────────────────────────────
-    // Uses an INLINE expandable picker (no modal overlay) so it works safely
-    // inside Kirby structure dialogs without triggering their outside-click handler.
+    // Opens the library in a native <dialog> modal (k-media-hub-modal) so it
+    // stacks above Kirby's own drawers/dialogs. Clicking a file shows an
+    // "Attachment details" pane where metadata can be edited in place.
     'k-mediahubpicker-field': {
       props: {
         label:    { type: String,  default: 'Media Hub Files' },
@@ -1754,6 +1859,7 @@ window.panel.plugin('kirbycode/media-hub', {
         return {
           selected:              Array.isArray(this.value) ? [...this.value] : [],
           showPicker:            false,
+          mode:                  'pick', // pick | edit
           pickerItems:           [],
           pickerFolders:         [],
           pickerTags:            [],
@@ -1765,6 +1871,9 @@ window.panel.plugin('kirbycode/media-hub', {
           pickerPagination:      { total: 0, page: 1, limit: 30 },
           pickerTimer:           null,
           pending:               [],
+          activeUuid:            null,
+          activeFile:            null,
+          activeLoading:         false,
         };
       },
 
@@ -1772,16 +1881,33 @@ window.panel.plugin('kirbycode/media-hub', {
         canAdd() {
           return !this.disabled && (this.multiple || this.selected.length === 0);
         },
+        allTagNames() {
+          return this.pickerTags.map(t => t.tag);
+        },
+        totalPages() {
+          return Math.max(1, Math.ceil(this.pickerPagination.total / this.pickerPagination.limit));
+        },
       },
 
       methods: {
         openPicker() {
+          this.mode       = 'pick';
           this.pending    = [...this.selected];
+          this.activeUuid = null;
+          this.activeFile = null;
           this.showPicker = true;
           this.loadPickerPage(1);
         },
 
+        // Jump straight to one selected file's details (no grid)
+        openEditor(item) {
+          this.mode       = 'edit';
+          this.showPicker = true;
+          this.loadDetails(item.uuid);
+        },
+
         closePicker() {
+          clearTimeout(this.pickerTimer);
           this.showPicker            = false;
           this.pickerSearch          = '';
           this.pickerFolder          = '';
@@ -1790,6 +1916,8 @@ window.panel.plugin('kirbycode/media-hub', {
           this.pickerTags            = [];
           this.pickerFolders         = [];
           this.expandedPickerFolders = [];
+          this.activeUuid            = null;
+          this.activeFile            = null;
         },
 
         async loadPickerPage(page = 1) {
@@ -1808,6 +1936,29 @@ window.panel.plugin('kirbycode/media-hub', {
             this.$panel.notification.error('Could not load Media Hub files');
           } finally {
             this.pickerLoading = false;
+          }
+        },
+
+        // file://uuid → URL segment; slashes become '+' like the other file routes
+        encodeRef(uuid) {
+          return encodeURIComponent(uuid).replace(/%2F/g, '+');
+        },
+
+        async loadDetails(uuid) {
+          this.activeUuid    = uuid;
+          this.activeFile    = null;
+          this.activeLoading = true;
+          try {
+            const res = await this.$panel.api.get('media-hub/files/' + this.encodeRef(uuid));
+            // Ignore stale responses if another file was clicked meanwhile
+            if (this.activeUuid === uuid) this.activeFile = res;
+          } catch (e) {
+            if (this.activeUuid === uuid) {
+              this.$panel.notification.error('Could not load file details');
+              this.activeUuid = null;
+            }
+          } finally {
+            if (this.activeUuid === uuid || this.activeUuid === null) this.activeLoading = false;
           }
         },
 
@@ -1848,6 +1999,16 @@ window.panel.plugin('kirbycode/media-hub', {
           }
         },
 
+        // WordPress-style: clicking a card selects it and shows its details
+        onItemClick(item) {
+          this.toggleItem(item);
+          if (this.activeUuid !== item.uuid) this.loadDetails(item.uuid);
+        },
+
+        showDetails(item) {
+          if (this.activeUuid !== item.uuid) this.loadDetails(item.uuid);
+        },
+
         confirmPicker() {
           this.selected = [...this.pending];
           this.$emit('input', this.selected);
@@ -1858,6 +2019,19 @@ window.panel.plugin('kirbycode/media-hub', {
           this.selected.splice(idx, 1);
           this.$emit('input', this.selected);
         },
+
+        // Metadata saved: refresh the file everywhere it is shown. The field value
+        // only stores file:// UUIDs, so no 'input' is emitted — editing metadata
+        // must not mark the page as changed.
+        onSaved(updated) {
+          this.activeFile = { ...this.activeFile, ...updated };
+          const ref   = 'file://' + updated.uuid;
+          const patch = { title: updated.title || updated.filename, alt: updated.alt };
+          for (const list of [this.pickerItems, this.pending, this.selected]) {
+            const i = list.findIndex(s => s.uuid === ref);
+            if (i > -1) list.splice(i, 1, { ...list[i], ...patch });
+          }
+        },
       },
 
       template: `
@@ -1867,16 +2041,20 @@ window.panel.plugin('kirbycode/media-hub', {
           <!-- Selected items list -->
           <div v-if="selected.length" class="k-mediahubpicker-selected">
             <div v-for="(item, idx) in selected" :key="item.uuid" class="k-mediahubpicker-item-selected">
-              <img v-if="item.type === 'image' && item.thumb" :src="item.thumb" :alt="item.title" />
+              <img v-if="item.type === 'image' && item.thumb" :src="item.thumb" :alt="item.alt || item.title" />
               <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               <span>{{ item.title || item.filename }}</span>
-              <button type="button" @click.stop="removeItem(idx)" title="Remove">×</button>
+              <span v-if="item.type === 'image' && !item.alt" class="k-mediahubpicker-noalt" title="Missing alt text">ALT</span>
+              <button type="button" class="k-mediahubpicker-edit-btn" @click.stop="openEditor(item)" title="Edit metadata">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </button>
+              <button v-if="!disabled" type="button" @click.stop="removeItem(idx)" title="Remove">×</button>
             </div>
           </div>
 
-          <!-- Toggle button -->
+          <!-- Open button -->
           <button
-            v-if="canAdd && !showPicker"
+            v-if="canAdd"
             type="button"
             class="k-media-hub-btn k-media-hub-btn--primary"
             @click.stop="openPicker"
@@ -1885,137 +2063,176 @@ window.panel.plugin('kirbycode/media-hub', {
             {{ selected.length ? (multiple ? 'Add more' : 'Change') : 'Select from Media Hub' }}
           </button>
 
-          <!-- Inline expandable picker (no overlay — works inside Kirby structure dialogs) -->
-          <div v-if="showPicker" class="k-mediahubpicker-inline">
+          <p v-if="help" class="k-mediahubpicker-help">{{ help }}</p>
 
-            <div class="k-mediahubpicker-inline-header">
-              <input
-                v-model="pickerSearch"
-                type="text"
-                placeholder="Search by filename, alt, description…"
-                class="k-media-hub-input"
-                @input="onPickerSearch"
-              />
-              <button type="button" class="k-media-hub-btn" @click.stop="closePicker" title="Close">×</button>
-            </div>
+          <!-- Modal -->
+          <k-media-hub-modal :open="showPicker" @close="closePicker">
+            <div :class="['k-mediahubpicker-modal', { 'is-edit-only': mode === 'edit', 'has-details': !!activeUuid }]">
 
-            <!-- Sidebar + grid -->
-            <div class="k-mediahubpicker-content">
-
-              <!-- Left sidebar: folders + tags -->
-              <div class="k-mediahubpicker-sidebar">
-
-                <!-- Folders -->
-                <div class="k-mediahubpicker-sb-section">
-                  <div class="k-mediahubpicker-sb-label">Folders</div>
-                  <button
-                    type="button"
-                    :class="['k-mediahubpicker-sb-item', { active: pickerFolder === '' && pickerTag === '' }]"
-                    @click.stop="setPickerFolder('')"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    All Files
-                  </button>
-                  <template v-for="f in pickerFolders" :key="f.path">
-                    <div class="k-mediahubpicker-sb-folder-row">
-                      <button
-                        v-if="f.children && f.children.length"
-                        type="button"
-                        class="k-mediahubpicker-sb-expand"
-                        @click.stop="togglePickerExpand(f.path)"
-                      >{{ expandedPickerFolders.includes(f.path) ? '▾' : '▸' }}</button>
-                      <span v-else class="k-mediahubpicker-sb-expand"></span>
-                      <button
-                        type="button"
-                        :class="['k-mediahubpicker-sb-item k-mediahubpicker-sb-item--folder', { active: pickerFolder === f.path }]"
-                        @click.stop="setPickerFolder(f.path)"
-                      >{{ f.title }}</button>
-                    </div>
-                    <template v-if="f.children && f.children.length && expandedPickerFolders.includes(f.path)">
-                      <button
-                        v-for="c in f.children"
-                        :key="c.path"
-                        type="button"
-                        :class="['k-mediahubpicker-sb-item k-mediahubpicker-sb-item--sub', { active: pickerFolder === c.path }]"
-                        @click.stop="setPickerFolder(c.path)"
-                      >{{ c.title }}</button>
-                    </template>
-                  </template>
-                </div>
-
-                <!-- Tags -->
-                <div v-if="pickerTags.length" class="k-mediahubpicker-sb-section">
-                  <div class="k-mediahubpicker-sb-divider"></div>
-                  <div class="k-mediahubpicker-sb-label">Tags</div>
-                  <button
-                    v-for="t in pickerTags"
-                    :key="t.tag"
-                    type="button"
-                    :class="['k-mediahubpicker-sb-item k-mediahubpicker-sb-item--tag', { active: pickerTag === t.tag }]"
-                    @click.stop="setPickerTag(t.tag)"
-                  >
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                    <span>{{ t.tag }}</span>
-                    <span class="k-mediahubpicker-sb-count">{{ t.count }}</span>
-                  </button>
-                </div>
-
+              <div class="k-mediahubpicker-modal-header">
+                <strong class="k-mediahubpicker-modal-title">{{ mode === 'edit' ? 'Edit file' : 'Media Hub' }}</strong>
+                <input
+                  v-if="mode === 'pick'"
+                  v-model="pickerSearch"
+                  type="text"
+                  placeholder="Search by filename, alt, description…"
+                  class="k-media-hub-input"
+                  @input="onPickerSearch"
+                />
+                <button type="button" class="k-media-hub-btn" @click="closePicker" title="Close">×</button>
               </div>
 
-              <!-- File grid -->
-              <div class="k-mediahubpicker-inline-body">
-                <div v-if="pickerLoading" class="k-media-hub-loading">
-                  <div class="k-media-hub-spinner"></div>
-                </div>
-                <div v-else-if="pickerItems.length" class="k-mediahubpicker-inline-grid">
-                  <div
-                    v-for="item in pickerItems"
-                    :key="item.uuid"
-                    :class="['k-mediahubpicker-pick', { selected: isSelected(item) }]"
-                    @click.stop="toggleItem(item)"
-                  >
-                    <div class="k-mediahubpicker-pick-preview">
-                      <img v-if="item.thumb" :src="item.thumb" :alt="item.title" loading="lazy" />
-                      <svg v-else width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    </div>
-                    <span class="k-mediahubpicker-pick-name">{{ item.title || item.filename }}</span>
-                    <span v-if="isSelected(item)" class="k-mediahubpicker-pick-check">✓</span>
+              <div class="k-mediahubpicker-content">
+
+                <!-- Left sidebar: folders + tags -->
+                <div v-if="mode === 'pick'" class="k-mediahubpicker-sidebar">
+                  <div class="k-mediahubpicker-sb-section">
+                    <div class="k-mediahubpicker-sb-label">Folders</div>
+                    <button
+                      type="button"
+                      :class="['k-mediahubpicker-sb-item', { active: pickerFolder === '' && pickerTag === '' }]"
+                      @click="setPickerFolder('')"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                      All Files
+                    </button>
+                    <template v-for="f in pickerFolders">
+                      <div :key="f.path" class="k-mediahubpicker-sb-folder-row">
+                        <button
+                          v-if="f.children && f.children.length"
+                          type="button"
+                          class="k-mediahubpicker-sb-expand"
+                          @click="togglePickerExpand(f.path)"
+                        >{{ expandedPickerFolders.includes(f.path) ? '▾' : '▸' }}</button>
+                        <span v-else class="k-mediahubpicker-sb-expand"></span>
+                        <button
+                          type="button"
+                          :class="['k-mediahubpicker-sb-item k-mediahubpicker-sb-item--folder', { active: pickerFolder === f.path }]"
+                          @click="setPickerFolder(f.path)"
+                        >{{ f.title }}</button>
+                      </div>
+                      <template v-if="f.children && f.children.length && expandedPickerFolders.includes(f.path)">
+                        <button
+                          v-for="c in f.children"
+                          :key="c.path"
+                          type="button"
+                          :class="['k-mediahubpicker-sb-item k-mediahubpicker-sb-item--sub', { active: pickerFolder === c.path }]"
+                          @click="setPickerFolder(c.path)"
+                        >{{ c.title }}</button>
+                      </template>
+                    </template>
+                  </div>
+
+                  <div v-if="pickerTags.length" class="k-mediahubpicker-sb-section">
+                    <div class="k-mediahubpicker-sb-divider"></div>
+                    <div class="k-mediahubpicker-sb-label">Tags</div>
+                    <button
+                      v-for="t in pickerTags"
+                      :key="t.tag"
+                      type="button"
+                      :class="['k-mediahubpicker-sb-item k-mediahubpicker-sb-item--tag', { active: pickerTag === t.tag }]"
+                      @click="setPickerTag(t.tag)"
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                      <span>{{ t.tag }}</span>
+                      <span class="k-mediahubpicker-sb-count">{{ t.count }}</span>
+                    </button>
                   </div>
                 </div>
-                <div v-else class="k-media-hub-empty" style="padding:1.5rem;text-align:center;color:var(--color-text-dimmed,#888)">
-                  No files found.
+
+                <!-- File grid -->
+                <div v-if="mode === 'pick'" class="k-mediahubpicker-modal-body">
+                  <div v-if="pickerLoading" class="k-media-hub-loading">
+                    <div class="k-media-hub-spinner"></div>
+                  </div>
+                  <div v-else-if="pickerItems.length" class="k-mediahubpicker-modal-grid">
+                    <div
+                      v-for="item in pickerItems"
+                      :key="item.uuid"
+                      :class="['k-mediahubpicker-pick', { selected: isSelected(item), active: activeUuid === item.uuid }]"
+                      @click="onItemClick(item)"
+                    >
+                      <div class="k-mediahubpicker-pick-preview">
+                        <img v-if="item.thumb" :src="item.thumb" :alt="item.alt || item.title" loading="lazy" />
+                        <svg v-else width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      </div>
+                      <span class="k-mediahubpicker-pick-name">{{ item.title || item.filename }}</span>
+                      <span v-if="isSelected(item)" class="k-mediahubpicker-pick-check">✓</span>
+                      <span v-if="item.type === 'image' && !item.alt" class="k-mediahubpicker-noalt k-mediahubpicker-noalt--card" title="Missing alt text">ALT</span>
+                      <button
+                        type="button"
+                        class="k-mediahubpicker-pick-info"
+                        title="Show details"
+                        @click.stop="showDetails(item)"
+                      >i</button>
+                    </div>
+                  </div>
+                  <div v-else class="k-media-hub-empty" style="padding:1.5rem;text-align:center;color:var(--color-text-dimmed,#888)">
+                    No files found.
+                  </div>
+                </div>
+
+                <!-- Attachment details -->
+                <aside v-if="activeUuid" class="k-mediahubpicker-details">
+                  <div v-if="activeLoading || !activeFile" class="k-media-hub-loading">
+                    <div class="k-media-hub-spinner"></div>
+                  </div>
+                  <template v-else>
+                    <div class="k-mediahubpicker-details-heading">Attachment details</div>
+                    <div class="k-mediahubpicker-details-preview">
+                      <img v-if="activeFile.type === 'image' && (activeFile.thumb || activeFile.url)" :src="activeFile.thumb || activeFile.url" :alt="activeFile.alt" />
+                      <svg v-else width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div class="k-mediahubpicker-details-file">
+                      <strong :title="activeFile.filename">{{ activeFile.filename }}</strong>
+                      <span>
+                        {{ activeFile.niceSize }} · {{ (activeFile.extension || '').toUpperCase() }}
+                        <template v-if="activeFile.width && activeFile.height"> · {{ activeFile.width }}×{{ activeFile.height }}</template>
+                      </span>
+                      <a :href="activeFile.url" target="_blank" rel="noopener">Open original ↗</a>
+                    </div>
+                    <k-media-hub-meta-form
+                      :file="activeFile"
+                      :all-tags="allTagNames"
+                      :readonly="activeFile.canUpdate === false"
+                      @saved="onSaved"
+                    />
+                  </template>
+                </aside>
+
+              </div>
+
+              <div class="k-mediahubpicker-modal-footer">
+                <template v-if="mode === 'pick'">
+                  <div v-if="pickerPagination.total > pickerPagination.limit" class="k-mediahubpicker-pagination">
+                    <button
+                      type="button"
+                      class="k-media-hub-btn"
+                      :disabled="pickerPagination.page <= 1"
+                      @click="loadPickerPage(pickerPagination.page - 1)"
+                    >←</button>
+                    <span>{{ pickerPagination.page }} / {{ totalPages }}</span>
+                    <button
+                      type="button"
+                      class="k-media-hub-btn"
+                      :disabled="pickerPagination.page >= totalPages"
+                      @click="loadPickerPage(pickerPagination.page + 1)"
+                    >→</button>
+                  </div>
+                  <div class="k-mediahubpicker-modal-actions">
+                    <button type="button" class="k-media-hub-btn" @click="closePicker">Cancel</button>
+                    <button type="button" class="k-media-hub-btn k-media-hub-btn--primary" @click="confirmPicker">
+                      Confirm{{ pending.length ? ' (' + pending.length + ')' : '' }}
+                    </button>
+                  </div>
+                </template>
+                <div v-else class="k-mediahubpicker-modal-actions">
+                  <button type="button" class="k-media-hub-btn k-media-hub-btn--primary" @click="closePicker">Done</button>
                 </div>
               </div>
 
             </div>
-
-            <div class="k-mediahubpicker-inline-footer">
-              <div v-if="pickerPagination.total > pickerPagination.limit" class="k-mediahubpicker-pagination">
-                <button
-                  type="button"
-                  class="k-media-hub-btn"
-                  :disabled="pickerPagination.page <= 1"
-                  @click.stop="loadPickerPage(pickerPagination.page - 1)"
-                >←</button>
-                <span>{{ pickerPagination.page }} / {{ Math.ceil(pickerPagination.total / pickerPagination.limit) }}</span>
-                <button
-                  type="button"
-                  class="k-media-hub-btn"
-                  :disabled="pickerPagination.page >= Math.ceil(pickerPagination.total / pickerPagination.limit)"
-                  @click.stop="loadPickerPage(pickerPagination.page + 1)"
-                >→</button>
-              </div>
-              <div class="k-mediahubpicker-inline-actions">
-                <button type="button" class="k-media-hub-btn" @click.stop="closePicker">Cancel</button>
-                <button type="button" class="k-media-hub-btn k-media-hub-btn--primary" @click.stop="confirmPicker">
-                  Confirm{{ pending.length ? ' (' + pending.length + ')' : '' }}
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-          <p v-if="help" class="k-mediahubpicker-help">{{ help }}</p>
+          </k-media-hub-modal>
         </div>
       `,
     },

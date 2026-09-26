@@ -11,6 +11,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.3.0] — 2026-09-26
+
+### Added
+
+- **Picker opens as a modal** — the `mediahubpicker` field now opens the Media Hub in a WordPress-style overlay with folders/tags sidebar, larger grid, and an "Attachment details" pane. Uses a native `<dialog>` so it stacks correctly above Kirby block and structure drawers.
+- **Edit metadata without leaving the page** — clicking a file in the picker shows its details; title, alt text, description, copyright, photographer, AI flag and tags can be edited and saved in place.
+- **✎ Edit on selected files** — each file already selected in the field has an edit button that opens its details directly. Metadata edits do not mark the page as changed (the field only stores `file://` UUIDs).
+- **Missing alt text badge** — images without alt text show an "ALT" badge in the picker grid and in the field.
+
+### Changed
+
+- **Metadata editing permission** — `PATCH media-hub/files/…/update` now allows any user whose Kirby role may update files (previously admins only). The update runs as the current user so Kirby's own file rules apply. Delete and bulk operations remain admin-only.
+- Metadata values are type-checked before saving (strings only; `aigenerated` normalised to a boolean).
+
+---
+
 ## [1.2.1] — 2026-09-09
 
 ### Fixed

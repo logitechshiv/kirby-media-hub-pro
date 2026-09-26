@@ -107,7 +107,9 @@ class Helpers
         ];
 
         if ($detailed) {
-            $data['uploaddate'] = (string) $file->content()->get('uploaddate')->value();
+            $data['canUpdate'] = $file->permissions()->can('update') === true;
+            $data['width']     = $file->type() === 'image' ? $file->width()  : null;
+            $data['height']    = $file->type() === 'image' ? $file->height() : null;
         }
 
         return $data;

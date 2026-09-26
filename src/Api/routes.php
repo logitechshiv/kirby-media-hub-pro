@@ -198,25 +198,36 @@ return [
         'method'  => 'PATCH',
         'auth'    => true,
         'action'  => function (string $encodedId) {
-            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
             $file  = Helpers::loadScopedFile($id, $slug);
             if ($file instanceof \Kirby\Http\Response) return $file;
 
+            // Anyone whose Kirby role may update files can edit metadata
+            // (lets editors fix alt/captions from the page picker)
+            if ($file->permissions()->can('update') !== true) {
+                return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'You are not allowed to edit this file'], 403);
+            }
+
             $body    = $kirby->request()->body()->toArray();
-            $allowed = ['title', 'alt', 'description', 'copyright', 'photographer', 'tags', 'aigenerated'];
+            $allowed = ['title', 'alt', 'description', 'copyright', 'photographer', 'tags'];
             $content = [];
 
             foreach ($allowed as $field) {
-                if (array_key_exists($field, $body)) {
-                    $content[$field] = $body[$field];
+                if (array_key_exists($field, $body) && is_scalar($body[$field])) {
+                    $content[$field] = (string) $body[$field];
                 }
+            }
+            if (array_key_exists('aigenerated', $body)) {
+                $content['aigenerated'] = filter_var($body['aigenerated'], FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false';
             }
 
             try {
-                $kirby->impersonate('kirby', fn() => $file->update($content));
+                // Runs as the current user so Kirby's own file rules apply
+                $file->update($content);
+            } catch (\Kirby\Exception\PermissionException $e) {
+                return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'You are not allowed to edit this file'], 403);
             } catch (\Throwable $e) {
                 error_log('[MediaHub] file update failed: ' . $e->getMessage());
                 return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'Operation failed.'], 400);
@@ -699,6 +710,7 @@ return [
                     'thumb'    => $thumb,
                     'type'     => $file->type(),
                     'title'    => (string) $file->content()->get('title')->or($file->filename())->value(),
+                    'alt'      => (string) $file->content()->get('alt')->value(),
                 ];
             }
 
