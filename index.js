@@ -2,6 +2,33 @@
  * Kirby Media Hub Pro — Panel Vue 3 Components
  * Registered via window.panel.plugin() — no build step required.
  */
+
+/**
+ * Uploads one file through Kirby's own files API, so Kirby enforces the
+ * user's permissions, the media-hub-asset upload whitelist and our
+ * file.create:after hook. Returns the created file model (already the
+ * final .webp when optimization ran) or throws with Kirby's message.
+ */
+async function mediaHubUploadFile(apiBase, pageApiPath, file) {
+  const csrf = window.panel?.system?.csrf || '';
+  const fd   = new FormData();
+  fd.append('file', file);
+  fd.append('filename', file.name);
+  fd.append('template', 'media-hub-asset');
+
+  const res = await fetch(apiBase.replace(/\/?$/, '/') + pageApiPath, {
+    method:      'POST',
+    body:        fd,
+    credentials: 'include',
+    headers:     csrf ? { 'X-CSRF': csrf } : {},
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(json.message || res.statusText || 'Upload error');
+  }
+  return json.data || null;
+}
+
 window.panel.plugin('kirbycode/media-hub', {
 
   components: {
@@ -375,7 +402,6 @@ window.panel.plugin('kirbycode/media-hub', {
 
         async uploadFiles(fileList) {
           const apiBase = this.apiUrl.replace(/\/media-hub\/?$/, '/');
-          const csrf    = this.$panel?.system?.csrf || window.panel?.system?.csrf || '';
           const total   = fileList.length;
 
           this.uploading     = true;
@@ -385,26 +411,8 @@ window.panel.plugin('kirbycode/media-hub', {
           let uploaded = 0;
           for (const file of fileList) {
             this.uploadCurrent++;
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('filename', file.name);
-            fd.append('template', 'media-hub-asset');
             try {
-              const uploadUrl = apiBase + this.currentUploadUrl;
-              const headers   = {};
-              if (csrf) headers['X-CSRF'] = csrf;
-
-              const res = await fetch(uploadUrl, {
-                method: 'POST',
-                body: fd,
-                credentials: 'include',
-                headers,
-              });
-
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || res.statusText || 'Upload error');
-              }
+              await mediaHubUploadFile(apiBase, this.currentUploadUrl, file);
               uploaded++;
             } catch (e) {
               this.$panel.notification.error('Upload failed: ' + file.name + (e.message ? ' — ' + e.message : ''));
@@ -600,7 +608,10 @@ window.panel.plugin('kirbycode/media-hub', {
         },
       },
 
+      // k-panel-inside renders Kirby's menu sidebar, topbar and notifications —
+      // without it the view takes over the whole screen
       template: `
+        <k-panel-inside class="k-media-hub-area">
         <div class="k-media-hub-view" :class="{ 'has-detail': !!activeFile }">
 
           <!-- Top navigation bar -->
@@ -622,9 +633,9 @@ window.panel.plugin('kirbycode/media-hub', {
                 {{ isPro ? 'Pro' : 'Free' }}
               </a>
               <template v-if="activeFolderPath">
-                <template v-for="crumb in breadcrumbs" :key="crumb.path">
-                  <span class="k-media-hub-breadcrumb-sep">/</span>
-                  <span class="k-media-hub-breadcrumb-current k-media-hub-breadcrumb-link" @click="selectFolder(crumb.path)">{{ crumb.title }}</span>
+                <template v-for="crumb in breadcrumbs">
+                  <span :key="crumb.path + ':sep'" class="k-media-hub-breadcrumb-sep">/</span>
+                  <span :key="crumb.path" class="k-media-hub-breadcrumb-current k-media-hub-breadcrumb-link" @click="selectFolder(crumb.path)">{{ crumb.title }}</span>
                 </template>
               </template>
             </div>
@@ -1094,6 +1105,7 @@ window.panel.plugin('kirbycode/media-hub', {
           />
 
         </div>
+        </k-panel-inside>
       `,
     },
 
@@ -1433,6 +1445,8 @@ window.panel.plugin('kirbycode/media-hub', {
           @click="onClick"
           @keydown.esc.stop
           @mousedown.stop
+          @dragover.prevent
+          @drop.prevent
         >
           <div v-if="open" class="k-media-hub-modal-box">
             <slot />
@@ -1899,10 +1913,35 @@ window.panel.plugin('kirbycode/media-hub', {
           activeUuid:            null,
           activeFile:            null,
           activeLoading:         false,
+          pickerRoot:            'media-hub',
+          uploading:             false,
+          uploadCurrent:         0,
+          uploadTotal:           0,
+          dragDepth:             0,
         };
       },
 
       computed: {
+        // Upload target: the folder selected in the sidebar, else the root
+        uploadPageApiPath() {
+          const parts = [this.pickerRoot, ...this.pickerFolder.split('/').filter(Boolean)];
+          return 'pages/' + parts.join('+') + '/files';
+        },
+        uploadTargetTitle() {
+          if (!this.pickerFolder) return 'Media Hub';
+          for (const f of this.pickerFolders) {
+            if (f.path === this.pickerFolder) return f.title;
+            const c = (f.children || []).find(c => c.path === this.pickerFolder);
+            if (c) return c.title;
+          }
+          return this.pickerFolder;
+        },
+        acceptMime() {
+          return { image: 'image/*', video: 'video/*', audio: 'audio/*' }[this.accept] || '';
+        },
+        isDragOver() {
+          return this.dragDepth > 0;
+        },
         canAdd() {
           return !this.disabled && (this.multiple || this.selected.length === 0);
         },
@@ -1943,6 +1982,103 @@ window.panel.plugin('kirbycode/media-hub', {
           this.expandedPickerFolders = [];
           this.activeUuid            = null;
           this.activeFile            = null;
+          this.dragDepth             = 0;
+        },
+
+        // ── Upload / drag-and-drop ───────────────────────────────────────
+        triggerPickerUpload() {
+          if (!this.uploading) this.$refs.pickerFileInput.click();
+        },
+
+        onPickerFileInput(e) {
+          this.uploadFiles(Array.from(e.target.files || []));
+          e.target.value = '';
+        },
+
+        hasFiles(e) {
+          return Array.from(e.dataTransfer?.types || []).includes('Files');
+        },
+
+        onPickerDragEnter(e) {
+          if (this.disabled || this.uploading || !this.hasFiles(e)) return;
+          this.dragDepth++;
+        },
+
+        onPickerDragLeave(e) {
+          if (!this.hasFiles(e)) return;
+          this.dragDepth = Math.max(0, this.dragDepth - 1);
+        },
+
+        onPickerDrop(e) {
+          this.dragDepth = 0;
+          if (this.disabled || this.uploading) return;
+          this.uploadFiles(Array.from(e.dataTransfer?.files || []));
+        },
+
+        async uploadFiles(files) {
+          if (!files.length) return;
+
+          // Respect the field's accept option (image/video/audio) before uploading
+          if (this.acceptMime) {
+            const prefix   = this.accept + '/';
+            const rejected = files.filter(f => !(f.type || '').startsWith(prefix));
+            files = files.filter(f => (f.type || '').startsWith(prefix));
+            if (rejected.length) {
+              this.$panel.notification.error('Only ' + this.accept + ' files are allowed here: ' + rejected.map(f => f.name).join(', '));
+            }
+          }
+          if (!this.multiple && files.length > 1) {
+            this.$panel.notification.info('This field takes a single file — only "' + files[0].name + '" was uploaded');
+            files = files.slice(0, 1);
+          }
+          if (!files.length) return;
+
+          const apiBase = this.$panel?.urls?.api || window.panel?.urls?.api || '/api';
+          this.uploading     = true;
+          this.uploadTotal   = files.length;
+          this.uploadCurrent = 0;
+
+          const added = [];
+          for (const file of files) {
+            this.uploadCurrent++;
+            try {
+              const created = await mediaHubUploadFile(apiBase, this.uploadPageApiPath, file);
+              if (!created || !created.id) continue;
+              // Same shape as the picker route's items
+              const f = await this.$panel.api.get('media-hub/files/' + this.encodeRef(created.id));
+              added.push({
+                id:       f.id,
+                uuid:     'file://' + f.uuid,
+                filename: f.filename,
+                url:      f.url,
+                thumb:    f.thumb,
+                type:     f.type,
+                title:    f.title || f.filename,
+                alt:      f.alt,
+              });
+            } catch (e) {
+              this.$panel.notification.error('Upload failed: ' + file.name + (e.message ? ' — ' + e.message : ''));
+            }
+          }
+
+          this.uploading     = false;
+          this.uploadCurrent = 0;
+          this.uploadTotal   = 0;
+
+          if (!added.length) return;
+
+          // Preselect the new files so the editor can add alt text and confirm
+          if (this.multiple) {
+            for (const item of added) {
+              if (!this.isSelected(item)) this.pending.push(item);
+            }
+          } else {
+            this.pending = [added[added.length - 1]];
+          }
+
+          this.$panel.notification.success(added.length + ' file' + (added.length > 1 ? 's' : '') + ' uploaded');
+          this.loadPickerPage(1);
+          this.loadDetails(added[added.length - 1].uuid);
         },
 
         async loadPickerPage(page = 1) {
@@ -1953,6 +2089,7 @@ window.panel.plugin('kirbycode/media-hub', {
             if (this.pickerFolder) params.set('folder', this.pickerFolder);
             if (this.pickerTag)    params.set('tag',    this.pickerTag);
             const res              = await this.$panel.api.get('media-hub/picker?' + params.toString());
+            this.pickerRoot        = res.root       || this.pickerRoot;
             this.pickerItems       = res.data       || [];
             this.pickerFolders     = res.folderTree  || [];
             this.pickerTags        = res.tags        || [];
@@ -2104,10 +2241,42 @@ window.panel.plugin('kirbycode/media-hub', {
                   class="k-media-hub-input"
                   @input="onPickerSearch"
                 />
+                <template v-if="mode === 'pick' && !disabled">
+                  <button
+                    type="button"
+                    class="k-media-hub-btn k-mediahubpicker-upload-btn"
+                    :disabled="uploading"
+                    :title="'Upload to ' + uploadTargetTitle"
+                    @click="triggerPickerUpload"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                    Upload
+                  </button>
+                  <input
+                    ref="pickerFileInput"
+                    type="file"
+                    :multiple="multiple"
+                    :accept="acceptMime || null"
+                    style="display:none"
+                    @change="onPickerFileInput"
+                  />
+                </template>
                 <button type="button" class="k-media-hub-btn" @click="closePicker" title="Close">×</button>
               </div>
 
-              <div class="k-mediahubpicker-content">
+              <!-- Whole content area is the drop zone in pick mode (it doesn't
+                   scroll, so the overlay always covers what the editor sees) -->
+              <div
+                class="k-mediahubpicker-content"
+                @dragenter="mode === 'pick' && onPickerDragEnter($event)"
+                @dragleave="mode === 'pick' && onPickerDragLeave($event)"
+                @drop.prevent="mode === 'pick' && onPickerDrop($event)"
+              >
+
+                <div v-if="isDragOver" class="k-mediahubpicker-dropzone-overlay">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                  <span>Drop files to upload to <strong>{{ uploadTargetTitle }}</strong></span>
+                </div>
 
                 <!-- Left sidebar: folders + tags -->
                 <div v-if="mode === 'pick'" class="k-mediahubpicker-sidebar">
@@ -2167,6 +2336,20 @@ window.panel.plugin('kirbycode/media-hub', {
 
                 <!-- File grid -->
                 <div v-if="mode === 'pick'" class="k-mediahubpicker-modal-body">
+                  <div v-if="uploading" class="k-mediahubpicker-upload-progress">
+                    <div class="k-media-hub-upload-progress">
+                      <div class="k-media-hub-upload-spinner"></div>
+                      <div class="k-media-hub-upload-label">
+                        Uploading &amp; optimizing {{ uploadCurrent }} of {{ uploadTotal }}…
+                      </div>
+                      <div class="k-media-hub-upload-bar-wrap">
+                        <div
+                          class="k-media-hub-upload-bar"
+                          :style="{ width: Math.round((uploadCurrent - 1) / uploadTotal * 100) + '%' }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
                   <div v-if="pickerLoading" class="k-media-hub-loading">
                     <div class="k-media-hub-spinner"></div>
                   </div>
@@ -2194,6 +2377,7 @@ window.panel.plugin('kirbycode/media-hub', {
                   </div>
                   <div v-else class="k-media-hub-empty" style="padding:1.5rem;text-align:center;color:var(--color-text-dimmed,#888)">
                     No files found.
+                    <template v-if="!disabled"><br>Drag files here or click Upload.</template>
                   </div>
                 </div>
 
@@ -2246,7 +2430,7 @@ window.panel.plugin('kirbycode/media-hub', {
                   </div>
                   <div class="k-mediahubpicker-modal-actions">
                     <button type="button" class="k-media-hub-btn" @click="closePicker">Cancel</button>
-                    <button type="button" class="k-media-hub-btn k-media-hub-btn--primary" @click="confirmPicker">
+                    <button type="button" class="k-media-hub-btn k-media-hub-btn--primary" :disabled="uploading" @click="confirmPicker">
                       Confirm{{ pending.length ? ' (' + pending.length + ')' : '' }}
                     </button>
                   </div>
@@ -2330,6 +2514,7 @@ window.panel.plugin('kirbycode/media-hub', {
       },
 
       template: `
+        <k-panel-inside class="k-media-hub-area">
         <div class="k-media-hub-view k-media-hub-license-page">
 
           <!-- Topbar -->
@@ -2429,6 +2614,7 @@ window.panel.plugin('kirbycode/media-hub', {
 
           </div>
         </div>
+        </k-panel-inside>
       `,
     },
 

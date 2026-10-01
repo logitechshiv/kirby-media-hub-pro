@@ -749,6 +749,8 @@ $routes = [
 
             return [
                 'data'        => $data,
+                // lets the picker build the upload target: pages/<root>+<folder>/files
+                'root'        => $slug,
                 'folderTree'  => $folderTree,
                 'tags'        => $tagList,
                 'pagination'  => [

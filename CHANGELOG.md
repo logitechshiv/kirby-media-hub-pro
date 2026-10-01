@@ -11,6 +11,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.4.0] — 2026-10-01
+
+### Added
+
+- **Upload / drag-and-drop in the picker** — editors can drop files onto the `mediahubpicker` modal or use the new **Upload** button instead of detouring through the Media Hub area. Files land in the folder selected in the sidebar (or the Media Hub root), are preselected, and their details pane opens so alt text can be added right away. Uploads go through Kirby's files API, so role permissions, the upload whitelist and WebP optimization apply as usual. Files that don't match the field's `accept` type are skipped; single-file fields take only the first dropped file.
+
+### Changed
+
+- The main view's upload code and the picker share one upload helper.
+- `GET media-hub/picker` now also returns the root slug (`root`).
+
+### Fixed
+
+- **Kirby menu sidebar on the Media Hub views** — the Media Hub and License views are now wrapped in Kirby's `k-panel-inside`, so the Panel menu (Site, Users, System, …) stays visible for navigation, and Kirby's notification toasts appear. On small screens Kirby's ☰ button opens the menu.
+- Vue template error in the folder breadcrumb (`key` on a `<template>`).
+
+---
+
 ## [1.3.0] — 2026-09-26
 
 ### Upgrade notes

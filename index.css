@@ -1,5 +1,44 @@
 /* ── Kirby Media Hub Pro — Panel Styles ─────────────────────────────────── */
 
+/* ── Kirby frame (k-panel-inside: menu sidebar + main) ────────────────── */
+/* The Media Hub scrolls its sidebar and grid internally, so Kirby's main
+   area becomes a fixed-height column instead of a padded, scrolling page */
+.k-media-hub-area > .k-panel-main {
+  padding: 0;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Kirby's topbar is only needed for the ☰ menu button on small screens —
+   the Media Hub has its own bar */
+.k-media-hub-area > .k-panel-main > .k-topbar {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  flex-shrink: 0;
+}
+
+@media (min-width: 60rem) { /* Kirby's own menu breakpoint */
+  .k-media-hub-area > .k-panel-main > .k-topbar {
+    display: none;
+  }
+}
+
+.k-media-hub-area .k-media-hub-view {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+/* License page has no inner layout — let its body take the scroll */
+.k-media-hub-area .k-media-hub-license-body {
+  flex: 1;
+  min-height: 0;
+}
+
 /* ── Outer layout ─────────────────────────────────────────────────────── */
 .k-media-hub-view {
   display: flex;
@@ -1314,6 +1353,49 @@ li.k-media-hub-folder-entry:hover {
 
 .k-mediahubpicker-modal-header > .k-media-hub-btn:last-child {
   margin-left: auto;
+}
+
+/* ── Picker upload: header button, drop overlay, progress ────────────── */
+.k-mediahubpicker-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.k-mediahubpicker-content {
+  position: relative;
+}
+
+/* pointer-events: none keeps drag events on the real elements below, so the
+   enter/leave counter stays balanced */
+.k-mediahubpicker-dropzone-overlay {
+  position: absolute;
+  inset: 0.5rem;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border: 2px dashed var(--color-focus, #2563eb);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  backdrop-filter: blur(1px);
+  color: var(--color-focus, #2563eb);
+  font-size: 0.95rem;
+  pointer-events: none;
+}
+
+.k-mediahubpicker-upload-progress {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin-bottom: 0.5rem;
+  padding: 0.6rem 0;
+  border-radius: 6px;
+  background: var(--color-white, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 /* ── Picker content area: sidebar + grid + details ───────────────────── */
