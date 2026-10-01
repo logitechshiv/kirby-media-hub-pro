@@ -265,6 +265,34 @@ $routes = [
         },
     ],
 
+    // ── 4b. Replace a file (new bytes, same UUID → updated everywhere) ──────
+    // Multipart upload with a single 'file' field. Available in Free and Pro.
+    [
+        'pattern' => 'media-hub/files/(:any)/replace',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function (string $encodedId) {
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $id    = str_replace('+', '/', rawurldecode($encodedId));
+            $file  = Helpers::loadScopedFile($id, $slug);
+            if ($file instanceof \Kirby\Http\Response) return $file;
+
+            // Checked before the upload is processed — Kirby 5.1's Api::upload()
+            // has no preflight hook. Kirby re-checks inside File::replace().
+            if (!Helpers::can($file, 'replace')) {
+                return Helpers::forbidden('You are not allowed to replace this file');
+            }
+
+            // Kirby's own upload handling (error codes, tmp files, chunking).
+            // Errors come back as status:error with Kirby's message.
+            return $this->upload(function (string $source, string $filename) use ($file) {
+                $replaced = \Kirbycode\MediaHub\Files\FileReplacer::replace($file, $source, $filename);
+                return Helpers::serializeFile($replaced, true);
+            }, true);
+        },
+    ],
+
     // ── 5. Optimize a file (convert JPEG/PNG→WebP or compress existing WebP) ──
     [
         'pattern' => 'media-hub/files/(:any)/optimize',
@@ -1210,4 +1238,5 @@ return Helpers::guardAreaAccess($routes, [
     'GET media-hub/picker',
     'GET media-hub/files/(:any)',
     'PATCH media-hub/files/(:any)/update',
+    'POST media-hub/files/(:any)/replace',
 ]);

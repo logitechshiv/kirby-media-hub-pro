@@ -1355,6 +1355,18 @@ li.k-media-hub-folder-entry:hover {
   margin-left: auto;
 }
 
+/* ── Replace file (detail panel + picker details pane) ───────────────── */
+.k-media-hub-replace {
+  margin: 0.75rem 0;
+}
+
+.k-media-hub-replace .k-media-hub-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
 /* ── Picker upload: header button, drop overlay, progress ────────────── */
 .k-mediahubpicker-upload-btn {
   display: inline-flex;

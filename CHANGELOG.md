@@ -11,6 +11,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.5.0] — 2026-10-01
+
+### Added
+
+- **Replace file** — a "Replace file" button in the Media Hub detail panel and in the picker's "Attachment details" pane. The new upload keeps the file's UUID, metadata and folder, so every page using the file shows the new version right away, like Kirby's own Replace. Available in Free and Pro; respects Kirby's `replace` permission (also for editors via the picker).
+  - Replacing a `.webp` with a JPG/PNG converts the upload to WebP, so the filename stays the same. With Pro optimization enabled, JPG/PNG replacements are converted to WebP in general.
+  - Other extension changes (e.g. PNG onto JPG) rename the file to the new extension; references still resolve via UUID.
+  - The replacement must be the same kind of file (an image stays an image).
+
+### Changed
+
+- `MediaOptimizer::encodeWebp()` is now a reusable public helper (upload optimization unchanged).
+- Upload errors that Kirby reports as `status: error` are now shown instead of being treated as success.
+
+---
+
 ## [1.4.0] — 2026-10-01
 
 ### Added

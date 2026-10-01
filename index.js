@@ -23,10 +23,26 @@ async function mediaHubUploadFile(apiBase, pageApiPath, file) {
     headers:     csrf ? { 'X-CSRF': csrf } : {},
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  // Kirby's upload handler reports rule/permission failures as HTTP 200
+  // with status: 'error', so both have to be checked
+  if (!res.ok || json.status === 'error') {
     throw new Error(json.message || res.statusText || 'Upload error');
   }
   return json.data || null;
+}
+
+/**
+ * Replaces a Media Hub file's content (same UUID, so every page using it
+ * updates). Returns the serialized file — its filename/extension may change.
+ */
+function mediaHubReplaceFile(apiBase, fileId, file) {
+  const encoded = encodeURIComponent(fileId).replace(/%2F/g, '+');
+  return mediaHubUploadFile(apiBase, 'media-hub/files/' + encoded + '/replace', file);
+}
+
+/** Native file-picker accept value for a Kirby file type. */
+function mediaHubAcceptFor(type) {
+  return { image: 'image/*', video: 'video/*', audio: 'audio/*' }[type] || '';
 }
 
 window.panel.plugin('kirbycode/media-hub', {
@@ -606,6 +622,15 @@ window.panel.plugin('kirbycode/media-hub', {
           }
           this.statsRefreshKey++;
         },
+
+        // Same UUID, but filename/id/thumb can change (e.g. PNG onto JPG)
+        onFileReplaced(updated) {
+          if (!updated || !updated.uuid) return;
+          const idx = this.files.findIndex(f => f.uuid === updated.uuid);
+          if (idx !== -1) this.files.splice(idx, 1, updated);
+          this.activeFile = updated;
+          this.statsRefreshKey++;
+        },
       },
 
       // k-panel-inside renders Kirby's menu sidebar, topbar and notifications —
@@ -1102,6 +1127,7 @@ window.panel.plugin('kirbycode/media-hub', {
             @updated="onFileUpdated"
             @deleted="onFileDeleted"
             @optimized="onFileOptimized"
+            @replaced="onFileReplaced"
           />
 
         </div>
@@ -1468,6 +1494,7 @@ window.panel.plugin('kirbycode/media-hub', {
         return {
           deleting:   false,
           optimizing: false,
+          replacing:  false,
           usageOpen:    false,
           usageLoading: false,
           usageLoaded:  false,
@@ -1489,9 +1516,34 @@ window.panel.plugin('kirbycode/media-hub', {
         encodedId() {
           return encodeURIComponent(this.file.id).replace(/%2F/g, '+');
         },
+        replaceAccept() {
+          return mediaHubAcceptFor(this.file.type);
+        },
       },
 
       methods: {
+        pickReplacement() {
+          if (!this.replacing) this.$refs.replaceInput.click();
+        },
+
+        async onReplacementChosen(e) {
+          const upload = (e.target.files || [])[0];
+          e.target.value = '';
+          if (!upload) return;
+
+          this.replacing = true;
+          try {
+            const apiBase = this.apiUrl.replace(/\/media-hub\/?$/, '/');
+            const updated = await mediaHubReplaceFile(apiBase, this.file.id, upload);
+            this.$panel.notification.success('File replaced — every page using it now shows the new version');
+            this.$emit('replaced', updated);
+          } catch (err) {
+            this.$panel.notification.error('Replace failed: ' + (err.message || String(err)));
+          } finally {
+            this.replacing = false;
+          }
+        },
+
         async deleteFile() {
           if (!confirm('Delete "' + this.file.filename + '"? This cannot be undone.')) return;
           this.deleting = true;
@@ -1588,6 +1640,27 @@ window.panel.plugin('kirbycode/media-hub', {
               class="k-media-hub-input k-media-hub-url-input"
               @click="$event.target.select()"
               title="File URL — click to select"
+            />
+          </div>
+
+          <!-- Replace: new content, same file — references stay intact -->
+          <div v-if="file.canReplace !== false" class="k-media-hub-replace">
+            <button
+              type="button"
+              class="k-media-hub-btn k-media-hub-btn--outlined k-media-hub-btn--full"
+              :disabled="replacing"
+              title="Upload a new version — every page using this file updates"
+              @click="pickReplacement"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              {{ replacing ? 'Replacing…' : 'Replace file' }}
+            </button>
+            <input
+              ref="replaceInput"
+              type="file"
+              :accept="replaceAccept || null"
+              style="display:none"
+              @change="onReplacementChosen"
             />
           </div>
 
@@ -1918,6 +1991,7 @@ window.panel.plugin('kirbycode/media-hub', {
           uploadCurrent:         0,
           uploadTotal:           0,
           dragDepth:             0,
+          replacing:             false,
         };
       },
 
@@ -1937,7 +2011,10 @@ window.panel.plugin('kirbycode/media-hub', {
           return this.pickerFolder;
         },
         acceptMime() {
-          return { image: 'image/*', video: 'video/*', audio: 'audio/*' }[this.accept] || '';
+          return mediaHubAcceptFor(this.accept);
+        },
+        replaceAccept() {
+          return mediaHubAcceptFor(this.activeFile && this.activeFile.type);
         },
         isDragOver() {
           return this.dragDepth > 0;
@@ -2182,6 +2259,45 @@ window.panel.plugin('kirbycode/media-hub', {
           this.$emit('input', this.selected);
         },
 
+        // ── Replace ──────────────────────────────────────────────────────
+        pickReplacement() {
+          if (!this.replacing) this.$refs.replaceInput.click();
+        },
+
+        async onReplacementChosen(e) {
+          const upload = (e.target.files || [])[0];
+          e.target.value = '';
+          if (!upload || !this.activeFile) return;
+
+          const uuid = this.activeUuid;
+          this.replacing = true;
+          try {
+            const apiBase = this.$panel?.urls?.api || window.panel?.urls?.api || '/api';
+            const updated = await mediaHubReplaceFile(apiBase, this.activeFile.id, upload);
+            this.$panel.notification.success('File replaced — every page using it now shows the new version');
+            if (this.activeUuid === uuid) this.activeFile = updated;
+
+            // Same file:// UUID, so the field value is unchanged (no 'input'
+            // emit) — only refresh how the file is shown
+            const patch = {
+              id:       updated.id,
+              filename: updated.filename,
+              url:      updated.url,
+              thumb:    updated.thumb,
+              title:    updated.title || updated.filename,
+              alt:      updated.alt,
+            };
+            for (const list of [this.pickerItems, this.pending, this.selected]) {
+              const i = list.findIndex(s => s.uuid === uuid);
+              if (i > -1) list.splice(i, 1, { ...list[i], ...patch });
+            }
+          } catch (err) {
+            this.$panel.notification.error('Replace failed: ' + (err.message || String(err)));
+          } finally {
+            this.replacing = false;
+          }
+        },
+
         // Metadata saved: refresh the file everywhere it is shown. The field value
         // only stores file:// UUIDs, so no 'input' is emitted — editing metadata
         // must not mark the page as changed.
@@ -2399,6 +2515,25 @@ window.panel.plugin('kirbycode/media-hub', {
                         <template v-if="activeFile.width && activeFile.height"> · {{ activeFile.width }}×{{ activeFile.height }}</template>
                       </span>
                       <a :href="activeFile.url" target="_blank" rel="noopener">Open original ↗</a>
+                    </div>
+                    <div v-if="activeFile.canReplace" class="k-media-hub-replace">
+                      <button
+                        type="button"
+                        class="k-media-hub-btn k-media-hub-btn--outlined k-media-hub-btn--full"
+                        :disabled="replacing"
+                        title="Upload a new version — every page using this file updates"
+                        @click="pickReplacement"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        {{ replacing ? 'Replacing…' : 'Replace file' }}
+                      </button>
+                      <input
+                        ref="replaceInput"
+                        type="file"
+                        :accept="replaceAccept || null"
+                        style="display:none"
+                        @change="onReplacementChosen"
+                      />
                     </div>
                     <k-media-hub-meta-form
                       :file="activeFile"

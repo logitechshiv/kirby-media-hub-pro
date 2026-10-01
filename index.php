@@ -5,6 +5,7 @@ use Kirby\Cms\App;
 if (!class_exists(\Kirbycode\MediaHub\Licensing\LicenseManager::class)) {
     require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
     require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
+    require_once __DIR__ . '/src/Files/FileReplacer.php';
     require_once __DIR__ . '/src/Licensing/LicenseManager.php';
     require_once __DIR__ . '/src/Licensing/UpdateChecker.php';
     require_once __DIR__ . '/src/Api/Helpers.php';

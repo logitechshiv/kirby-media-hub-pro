@@ -74,40 +74,14 @@ class MediaOptimizer
         $guard = self::guardSize($file);
         if ($guard !== null) return $guard;
 
-        $ext  = strtolower($file->extension());
         $root = $file->root();
-
         if (!is_readable($root)) return self::noop();
 
-        $image = null;
-        switch ($ext) {
-            case 'jpg':
-            case 'jpeg':
-                $image = imagecreatefromjpeg($root);
-                break;
-            case 'png':
-                $image = imagecreatefrompng($root);
-                if ($image) {
-                    imagepalettetotruecolor($image);
-                    imagealphablending($image, false);
-                    imagesavealpha($image, true);
-                }
-                break;
-            default:
-                return self::noop();
-        }
+        $tmpPath = self::encodeWebp($root, $file->extension(), $opt);
+        if ($tmpPath === null) return self::noop();
 
-        if (!$image) return self::noop();
-
-        $quality     = ($opt['quality'] ?? [])['webp'] ?? 82;
         $origSize    = (int) filesize($root);
         $newFilename = (string) preg_replace('/\.(jpe?g|png)$/i', '.webp', $file->filename());
-        $tmpPath     = sys_get_temp_dir() . '/' . uniqid('mh_', true) . '.webp';
-
-        $ok = imagewebp($image, $tmpPath, $quality);
-        imagedestroy($image);
-
-        if (!$ok || !file_exists($tmpPath)) return self::noop();
 
         $newSize = (int) filesize($tmpPath);
         $oldUuid = $file->uuid()->id();
@@ -170,6 +144,50 @@ class MediaOptimizer
             'newId'       => $newFile->id(),
             'uuid'        => $oldUuid,
         ];
+    }
+
+    /**
+     * Encodes a JPEG/PNG at $source to a WebP temp file at the configured
+     * quality. Returns the temp path (caller deletes it) or null when GD is
+     * missing, the type is unsupported, the image is too large, or encoding fails.
+     */
+    public static function encodeWebp(string $source, string $ext, array $opt = []): ?string
+    {
+        if (!extension_loaded('gd') || !is_readable($source)) return null;
+        if (self::tooLargeForGd($source)) return null;
+
+        $image = null;
+        switch (strtolower($ext)) {
+            case 'jpg':
+            case 'jpeg':
+                $image = @imagecreatefromjpeg($source);
+                break;
+            case 'png':
+                $image = @imagecreatefrompng($source);
+                if ($image) {
+                    imagepalettetotruecolor($image);
+                    imagealphablending($image, false);
+                    imagesavealpha($image, true);
+                }
+                break;
+            default:
+                return null;
+        }
+
+        if (!$image) return null;
+
+        $quality = ($opt['quality'] ?? [])['webp'] ?? 82;
+        $tmpPath = sys_get_temp_dir() . '/' . uniqid('mh_', true) . '.webp';
+
+        $ok = imagewebp($image, $tmpPath, $quality);
+        imagedestroy($image);
+
+        if (!$ok || !file_exists($tmpPath)) {
+            if (file_exists($tmpPath)) unlink($tmpPath);
+            return null;
+        }
+
+        return $tmpPath;
     }
 
     // ── In-place WebP compression ──────────────────────────────────────────────
@@ -253,6 +271,16 @@ class MediaOptimizer
             return array_merge(self::noop(), ['skipped' => true, 'reason' => 'Image dimensions too large']);
         }
         return null;
+    }
+
+    /**
+     * Path-based version of guardSize() — same 25 MB / 8000 px GD limits.
+     */
+    private static function tooLargeForGd(string $path): bool
+    {
+        if ((int) @filesize($path) > 25 * 1024 * 1024) return true;
+        $dims = @getimagesize($path);
+        return $dims && ($dims[0] > 8000 || $dims[1] > 8000);
     }
 
     private static function noop(): array

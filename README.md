@@ -25,6 +25,7 @@ A centralized media library plugin for [Kirby CMS](https://getkirby.com) 5 — W
 - **File metadata** — edit title, alt text, description, copyright, photographer, and upload date per file
 - **`mediahubpicker` field** — custom field type for any blueprint; opens the library in a modal (works inside block and structure drawers)
 - **Edit metadata from the page** — click a file in the picker (or ✎ on a selected file) to edit title, alt text, description and tags without leaving the page; images without alt text are flagged with an ALT badge. Any user whose Kirby role may update files can save metadata
+- **Replace file** — upload a new version from the detail panel or the picker; UUID, metadata and folder are kept, so every page using the file updates (JPG/PNG onto WebP is converted automatically)
 - **Upload from the picker** — drag files onto the picker modal or click **Upload**; they go into the folder selected in the sidebar (or the Media Hub root), are selected automatically and open in the details pane for alt text. Uses Kirby's own upload API, so role permissions, the upload whitelist and WebP optimization all apply. The field's `accept` option is respected
 - **UUID-based references** — saved as `file://uuid` — identical format to Kirby's native `files` field
 - **Usage tracking** — see every page that references a given file

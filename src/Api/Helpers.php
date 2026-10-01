@@ -238,7 +238,8 @@ class Helpers
         ];
 
         if ($detailed) {
-            $data['canUpdate'] = $file->permissions()->can('update') === true;
+            $data['canUpdate']  = $file->permissions()->can('update') === true;
+            $data['canReplace'] = $file->permissions()->can('replace') === true;
             $data['width']     = $file->type() === 'image' ? $file->width()  : null;
             $data['height']    = $file->type() === 'image' ? $file->height() : null;
         }
