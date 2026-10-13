@@ -58,6 +58,7 @@ window.panel.plugin('kirbycode/media-hub', {
         uploadApiBase: { type: String,  required: true },
         isPro:           { type: Boolean, default: false },
         isAdmin:         { type: Boolean, default: false },
+        canDelete:       { type: Boolean, default: false },
         updateAvailable: { type: Boolean, default: false },
         latestVersion:   { type: String,  default: '' },
       },
@@ -493,7 +494,7 @@ window.panel.plugin('kirbycode/media-hub', {
             this.statsRefreshKey++;
           } catch (e) {
             const msg = e.status === 403 || e.code === 403
-              ? 'Only administrators can delete files.'
+              ? 'You are not allowed to delete these files.'
               : 'Bulk delete failed: ' + (e.message || e);
             this.$panel.notification.error(msg);
           }
@@ -954,7 +955,7 @@ window.panel.plugin('kirbycode/media-hub', {
                   </button>
                 </div>
                 <div v-if="selectedFiles.length" class="k-media-hub-bulk-actions">
-                  <button v-if="isAdmin" type="button" class="k-media-hub-btn k-media-hub-btn--danger-outline" @click="doBulkDelete">
+                  <button v-if="canDelete" type="button" class="k-media-hub-btn k-media-hub-btn--danger-outline" @click="doBulkDelete">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     Delete
                   </button>
@@ -1710,7 +1711,7 @@ window.panel.plugin('kirbycode/media-hub', {
             <k-media-hub-upgrade v-else feature="Image Optimization" />
           </div>
 
-          <div class="k-media-hub-detail-danger-section">
+          <div v-if="file.canDelete !== false" class="k-media-hub-detail-danger-section">
             <div class="k-media-hub-detail-section-heading" style="color:var(--color-negative,#e53e3e)">Danger Zone</div>
             <div class="k-media-hub-detail-danger">
               <button

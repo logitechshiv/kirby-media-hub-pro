@@ -247,12 +247,17 @@ $routes = [
         'method'  => 'DELETE',
         'auth'    => true,
         'action'  => function (string $encodedId) {
-            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby = App::instance();
             $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $id    = str_replace('+', '/', rawurldecode($encodedId));
             $file  = Helpers::loadScopedFile($id, $slug);
             if ($file instanceof \Kirby\Http\Response) return $file;
+
+            // Honour the user's real permissions (role + file blueprint), plus
+            // any role restriction from `kirbycode.media-hub.delete-roles`.
+            if (!Helpers::canDeleteFile($file)) {
+                return Helpers::forbidden('You are not allowed to delete this file');
+            }
 
             try {
                 $file->delete();
@@ -928,7 +933,6 @@ $routes = [
         'auth'    => true,
         'action'  => function () {
             if ($guard = Helpers::requirePro()) return $guard;
-            if ($guard = Helpers::requireAdmin()) return $guard;
             $kirby   = App::instance();
             $slug    = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
             $ids     = (array) $kirby->request()->get('ids', []);
@@ -939,6 +943,7 @@ $routes = [
                 $id   = str_replace('+', '/', rawurldecode((string) $encodedId));
                 $file = Helpers::loadScopedFile($id, $slug);
                 if ($file instanceof \Kirby\Http\Response) { $errors[] = basename($id) . ': access denied'; continue; }
+                if (!Helpers::canDeleteFile($file)) { $errors[] = basename($id) . ': permission denied'; continue; }
                 try {
                     $file->delete();
                     $deleted++;

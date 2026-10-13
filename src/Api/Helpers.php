@@ -51,6 +51,56 @@ class Helpers
     }
 
     /**
+     * Whether the current user may delete $file from the Media Hub.
+     *
+     * Kirby's own file permissions (role + file blueprint) always apply. On top
+     * of that, a site may restrict deletion to named roles via the option
+     * `kirbycode.media-hub.delete-roles`, e.g. ['admin', 'manager']. Left unset
+     * (the default) the Kirby permissions alone decide.
+     */
+    public static function canDeleteFile(File $file): bool
+    {
+        if (!self::can($file, 'delete')) {
+            return false;
+        }
+
+        return self::roleMayDelete();
+    }
+
+    /**
+     * Role-level counterpart of canDeleteFile(), for Panel view props and the
+     * file list: whether this user may delete files at all. Per-file blueprint
+     * rules are still enforced on every actual delete.
+     */
+    public static function canDeleteFiles(): bool
+    {
+        $user = App::instance()->user();
+
+        if ($user === null || $user->role()->permissions()->for('files', 'delete') !== true) {
+            return false;
+        }
+
+        return self::roleMayDelete();
+    }
+
+    /**
+     * Checks the current user's role against `kirbycode.media-hub.delete-roles`.
+     * No option set → every role that Kirby already permits may delete.
+     */
+    private static function roleMayDelete(): bool
+    {
+        $roles = App::instance()->option('kirbycode.media-hub.delete-roles');
+
+        if ($roles === null) {
+            return true;
+        }
+
+        $user = App::instance()->user();
+
+        return $user !== null && in_array($user->role()->id(), (array) $roles, true);
+    }
+
+    /**
      * Whether the current user may create a file with the given template in $parent.
      * Uses an unsaved model so the file blueprint's `create` option is evaluated.
      */
@@ -240,6 +290,7 @@ class Helpers
         if ($detailed) {
             $data['canUpdate']  = $file->permissions()->can('update') === true;
             $data['canReplace'] = $file->permissions()->can('replace') === true;
+            $data['canDelete']  = self::canDeleteFile($file);
             $data['width']     = $file->type() === 'image' ? $file->width()  : null;
             $data['height']    = $file->type() === 'image' ? $file->height() : null;
         }
