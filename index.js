@@ -624,6 +624,12 @@ window.panel.plugin('kirbycode/media-hub', {
           this.statsRefreshKey++;
         },
 
+        // A rename changes id and filename but keeps the UUID, so the replace
+        // handler already does exactly the right thing
+        onFileRenamed(updated) {
+          this.onFileReplaced(updated);
+        },
+
         // Same UUID, but filename/id/thumb can change (e.g. PNG onto JPG)
         onFileReplaced(updated) {
           if (!updated || !updated.uuid) return;
@@ -1129,6 +1135,7 @@ window.panel.plugin('kirbycode/media-hub', {
             @deleted="onFileDeleted"
             @optimized="onFileOptimized"
             @replaced="onFileReplaced"
+            @renamed="onFileRenamed"
           />
 
         </div>
@@ -1489,13 +1496,16 @@ window.panel.plugin('kirbycode/media-hub', {
         allTags: { type: Array,   default: () => [] },
         isPro:   { type: Boolean, default: false },
       },
-      emits: ['close', 'updated', 'deleted', 'optimized'],
+      emits: ['close', 'updated', 'deleted', 'optimized', 'replaced', 'renamed'],
 
       data() {
         return {
           deleting:   false,
           optimizing: false,
           replacing:  false,
+          renaming:    false,
+          renameOpen:  false,
+          renameValue: '',
           usageOpen:    false,
           usageLoading: false,
           usageLoaded:  false,
@@ -1510,6 +1520,8 @@ window.panel.plugin('kirbycode/media-hub', {
           this.usageLoaded = false;
           this.usageCount  = '?';
           this.usageList   = [];
+          this.renameOpen  = false;
+          this.renameValue = '';
         },
       },
 
@@ -1520,9 +1532,67 @@ window.panel.plugin('kirbycode/media-hub', {
         replaceAccept() {
           return mediaHubAcceptFor(this.file.type);
         },
+        // Only the base name is editable — Kirby keeps the extension on rename
+        baseName() {
+          const name = this.file.filename || '';
+          const dot  = name.lastIndexOf('.');
+          return dot > 0 ? name.slice(0, dot) : name;
+        },
+        extension() {
+          const name = this.file.filename || '';
+          const dot  = name.lastIndexOf('.');
+          return dot > 0 ? name.slice(dot) : '';
+        },
+        canRename() {
+          return this.isPro && this.file.canRename !== false;
+        },
       },
 
       methods: {
+        startRename() {
+          if (!this.canRename) return;
+          this.renameValue = this.baseName;
+          this.renameOpen  = true;
+          this.$nextTick(() => {
+            const input = this.$refs.renameInput;
+            if (input) { input.focus(); input.select(); }
+          });
+        },
+
+        cancelRename() {
+          this.renameOpen  = false;
+          this.renameValue = '';
+        },
+
+        async saveRename() {
+          const name = (this.renameValue || '').trim();
+          if (!name || this.renaming) return;
+          if (name === this.baseName) { this.cancelRename(); return; }
+
+          this.renaming = true;
+          try {
+            const res = await this.$panel.api.post(
+              'media-hub/files/' + this.encodedId + '/rename',
+              { name }
+            );
+
+            // A refused rename (duplicate name, empty slug) comes back as
+            // status:error with a message rather than an HTTP error
+            if (res && res.status === 'error') {
+              this.$panel.notification.error(res.message || 'Rename failed');
+              return;
+            }
+
+            this.$panel.notification.success('Renamed to ' + res.filename);
+            this.renameOpen = false;
+            this.$emit('renamed', res);
+          } catch (e) {
+            this.$panel.notification.error('Rename failed: ' + (e.message || String(e)));
+          } finally {
+            this.renaming = false;
+          }
+        },
+
         pickReplacement() {
           if (!this.replacing) this.$refs.replaceInput.click();
         },
@@ -1617,9 +1687,41 @@ window.panel.plugin('kirbycode/media-hub', {
       template: `
         <div class="k-media-hub-detail">
           <div class="k-media-hub-detail-header">
-            <span class="k-media-hub-detail-filename" :title="file.filename">{{ file.filename }}</span>
+            <span v-if="!renameOpen" class="k-media-hub-detail-filename" :title="file.filename">{{ file.filename }}</span>
+            <button
+              v-if="canRename && !renameOpen"
+              type="button"
+              class="k-media-hub-rename-toggle"
+              title="Rename file — pages using it keep working"
+              @click="startRename"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <span v-if="renameOpen" class="k-media-hub-detail-filename">Rename file</span>
             <button class="k-media-hub-btn" @click="$emit('close')" title="Close">×</button>
           </div>
+
+          <!-- Rename keeps the UUID, so every page using the file still resolves it -->
+          <form v-if="renameOpen" class="k-media-hub-rename" @submit.prevent="saveRename">
+            <div class="k-media-hub-rename-row">
+              <input
+                ref="renameInput"
+                v-model="renameValue"
+                type="text"
+                class="k-media-hub-input"
+                :disabled="renaming"
+                placeholder="File name…"
+                @keydown.esc.prevent="cancelRename"
+              />
+              <span class="k-media-hub-rename-ext">{{ extension }}</span>
+            </div>
+            <div class="k-media-hub-rename-actions">
+              <button type="button" class="k-media-hub-btn" :disabled="renaming" @click="cancelRename">Cancel</button>
+              <button type="submit" class="k-media-hub-btn k-media-hub-btn--primary" :disabled="renaming || !renameValue.trim()">
+                {{ renaming ? 'Renaming…' : 'Save' }}
+              </button>
+            </div>
+          </form>
 
           <div class="k-media-hub-detail-preview">
             <img v-if="file.type === 'image' && file.url" :src="file.url" :alt="file.alt" />
@@ -2618,6 +2720,7 @@ window.panel.plugin('kirbycode/media-hub', {
             { label: 'Tags & tag cloud',              pro: true  },
             { label: 'Delete tag globally',           pro: true  },
             { label: 'Smart filters (date/user/size)',pro: true  },
+            { label: 'Rename file',                   pro: true  },
             { label: 'Bulk delete / move / rename / tag', pro: true },
             { label: 'Duplicate detection',           pro: true  },
             { label: 'Auto WebP conversion on upload',pro: true  },

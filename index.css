@@ -963,6 +963,56 @@ li.k-media-hub-folder-entry:hover {
   flex: 1;
 }
 
+.k-media-hub-rename-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-dimmed, #777);
+  cursor: pointer;
+}
+
+.k-media-hub-rename-toggle:hover {
+  background: var(--color-background, #f5f5f5);
+  color: var(--color-text, #000);
+}
+
+.k-media-hub-rename {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.k-media-hub-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.k-media-hub-rename-row .k-media-hub-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.k-media-hub-rename-ext {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  color: var(--color-text-dimmed, #777);
+  font-family: var(--font-mono, monospace);
+}
+
+.k-media-hub-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
 .k-media-hub-detail-preview {
   background: var(--color-background, #f5f5f5);
   border-radius: 8px;

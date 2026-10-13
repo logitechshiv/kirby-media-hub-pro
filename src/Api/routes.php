@@ -298,6 +298,54 @@ $routes = [
         },
     ],
 
+    // ── 4c. Rename a file (same UUID → references stay intact) ──────────────
+    [
+        'pattern' => 'media-hub/files/(:any)/rename',
+        'method'  => 'POST',
+        'auth'    => true,
+        'action'  => function (string $encodedId) {
+            if ($guard = Helpers::requirePro()) return $guard;
+
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $id    = str_replace('+', '/', rawurldecode($encodedId));
+            $file  = Helpers::loadScopedFile($id, $slug);
+            if ($file instanceof \Kirby\Http\Response) return $file;
+
+            if (!Helpers::canRenameFile($file)) {
+                return Helpers::forbidden('You are not allowed to rename this file');
+            }
+
+            // Same sanitising as bulk rename, so both produce identical names.
+            // The extension is never part of $name — Kirby keeps the old one.
+            $name = Str::slug(trim((string) $kirby->request()->get('name', '')));
+
+            if ($name === '') {
+                return ['status' => 'error', 'message' => 'Please enter a file name'];
+            }
+
+            // Nothing to do — return the file unchanged rather than writing
+            if ($name === $file->name()) {
+                return Helpers::serializeFile($file, true);
+            }
+
+            try {
+                $renamed = $kirby->impersonate('kirby', function () use ($file, $name) {
+                    return $file->changeName($name);
+                });
+            } catch (\Kirby\Exception\DuplicateException | \Kirby\Exception\LogicException $e) {
+                // FileRules refuses a name already taken in this folder; LogicException
+                // is the deeper guard in FileActions against overwriting on disk
+                return ['status' => 'error', 'message' => 'A file named "' . $name . '.' . $file->extension() . '" already exists in this folder'];
+            } catch (\Throwable $e) {
+                error_log('[MediaHub] rename failed for ' . $file->filename() . ': ' . $e->getMessage());
+                return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'Operation failed.'], 500);
+            }
+
+            return Helpers::serializeFile($renamed, true);
+        },
+    ],
+
     // ── 5. Optimize a file (convert JPEG/PNG→WebP or compress existing WebP) ──
     [
         'pattern' => 'media-hub/files/(:any)/optimize',

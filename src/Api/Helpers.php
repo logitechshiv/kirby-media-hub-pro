@@ -64,7 +64,7 @@ class Helpers
             return false;
         }
 
-        return self::roleMayDelete();
+        return self::roleAllowed('delete-roles');
     }
 
     /**
@@ -80,16 +80,31 @@ class Helpers
             return false;
         }
 
-        return self::roleMayDelete();
+        return self::roleAllowed('delete-roles');
     }
 
     /**
-     * Checks the current user's role against `kirbycode.media-hub.delete-roles`.
-     * No option set → every role that Kirby already permits may delete.
+     * Whether the current user may rename $file. Kirby's `changeName`
+     * permission applies first; `kirbycode.media-hub.rename-roles` can then
+     * narrow it to named roles, exactly like `delete-roles` above.
      */
-    private static function roleMayDelete(): bool
+    public static function canRenameFile(File $file): bool
     {
-        $roles = App::instance()->option('kirbycode.media-hub.delete-roles');
+        if (!self::can($file, 'changeName')) {
+            return false;
+        }
+
+        return self::roleAllowed('rename-roles');
+    }
+
+    /**
+     * Checks the current user's role against `kirbycode.media-hub.{$key}`,
+     * e.g. 'delete-roles'. No option set → every role that Kirby already
+     * permits may perform the action.
+     */
+    private static function roleAllowed(string $key): bool
+    {
+        $roles = App::instance()->option('kirbycode.media-hub.' . $key);
 
         if ($roles === null) {
             return true;
@@ -291,6 +306,7 @@ class Helpers
             $data['canUpdate']  = $file->permissions()->can('update') === true;
             $data['canReplace'] = $file->permissions()->can('replace') === true;
             $data['canDelete']  = self::canDeleteFile($file);
+            $data['canRename']  = self::canRenameFile($file);
             $data['width']     = $file->type() === 'image' ? $file->width()  : null;
             $data['height']    = $file->type() === 'image' ? $file->height() : null;
         }

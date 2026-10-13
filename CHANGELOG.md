@@ -11,6 +11,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.6.0] — 2026-10-13
+
+### Added
+
+- **Rename file** — a pencil next to the filename in the Media Hub detail panel renames a single file inline. The extension is fixed and the UUID is kept, so every page referencing the file keeps resolving it — the same guarantee as **Replace file**. Names are sanitised with `Str::slug()`, identical to bulk rename, and a clash with an existing filename is reported instead of overwriting anything. Pro only.
+  - New route: `POST media-hub/files/(:any)/rename`.
+  - New option `kirbycode.media-hub.rename-roles` restricts renaming to named roles, e.g. `['admin', 'manager']`. Unset (the default) means Kirby's own `changeName` permission alone decides.
+
+### Changed
+
+- `Helpers::canDeleteFile()`/`canDeleteFiles()` now share a generic `roleAllowed()` role gate with the new rename helper. No behaviour change.
+- The file detail component declares its `replaced` event, which it previously emitted without declaring.
+
 ## [1.5.0] — 2026-10-01
 
 ### Added
