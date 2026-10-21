@@ -585,6 +585,20 @@ $routes = [
 
             $folder = $kirby->page($slug . '/' . $path);
 
+            // An orphaned sidecar ("photo.jpg.txt" without "photo.jpg") makes
+            // Kirby pick it as the content file, so the folder reports the wrong
+            // template and changeTitle() would write into it. Clean those up
+            // and look the folder up again from disk.
+            if (
+                $folder &&
+                $folder->intendedTemplate()->name() !== 'media-hub-folder' &&
+                is_file($folder->root() . '/media-hub-folder.txt') &&
+                Helpers::removeOrphanSidecarsIn($folder->root()) > 0
+            ) {
+                $folder->parent()?->purge();
+                $folder = $kirby->page($slug . '/' . $path);
+            }
+
             if (!$folder || $folder->intendedTemplate()->name() !== 'media-hub-folder') {
                 return ['status' => 'error', 'message' => 'Folder not found'];
             }

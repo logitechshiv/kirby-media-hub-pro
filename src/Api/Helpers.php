@@ -212,6 +212,28 @@ class Helpers
     }
 
     /**
+     * Deletes orphaned sidecars ("name.ext.txt" whose "name.ext" is gone)
+     * directly inside $dir, without touching subfolders or the folder's own
+     * content file. Returns how many were removed.
+     */
+    public static function removeOrphanSidecarsIn(string $dir): int
+    {
+        $removed = 0;
+        foreach (scandir($dir) ?: [] as $name) {
+            $path = $dir . '/' . $name;
+            if (!is_file($path) || !str_ends_with($name, '.txt')) continue;
+
+            // Same rule as below: "photo.jpg.txt" without "photo.jpg"
+            if (pathinfo(substr($name, 0, -4), PATHINFO_EXTENSION) !== ''
+                && !file_exists(substr($path, 0, -4))
+                && @unlink($path)) {
+                $removed++;
+            }
+        }
+        return $removed;
+    }
+
+    /**
      * Cleans up what Kirby leaves behind when deleting a Media Hub folder that
      * contains orphaned sidecars ("name.ext.txt" whose "name.ext" is gone).
      *
