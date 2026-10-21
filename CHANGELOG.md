@@ -25,6 +25,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **License and update checks are cached again.** The cache was registered under a plugin key Kirby ignores, so it was a `NullCache`: every Pro check called kirbycode.com and every Panel view called Packagist. That meant one request per check, several per page, and a 3–4 s wait each while either service was slow or down. It is now registered through the plugin's `cache.license` option, so a valid license is checked once per 7 days and updates once per day. Existing `.grace` files keep working.
+- **License server outages no longer slow every request.** When kirbycode.com can't be reached, the grace-period result is cached for 15 minutes instead of retrying on every check. The 48-hour grace period itself is unchanged.
 - Media Hub detail panel: sections no longer shrink to fit the screen height. With a long metadata form, the preview was squeezed to its minimum height, cutting off the bottom of the image and hiding the focus bar (focus value, **Reset**, **Remove**). The panel now scrolls instead.
 
 ### Changed

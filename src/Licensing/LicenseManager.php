@@ -6,10 +6,12 @@ use Kirby\Cms\App;
 
 class LicenseManager
 {
-    const CACHE_DRIVER    = 'kirbycode-media-hub-license';
+    const CACHE_DRIVER    = 'kirbycode.media-hub.license'; // registered via the plugin's `cache.license` option
+    const GRACE_DIR       = 'kirbycode-media-hub-license'; // folder of the .grace file in the cache root
     const CACHE_KEY       = 'status';
     const CACHE_TTL_VALID = 10080; // 7 days in minutes
     const CACHE_TTL_FAIL  = 1440;  // 1 day for explicit revocation
+    const CACHE_TTL_DOWN  = 15;    // license server unreachable: retry after 15 minutes, not on every call
     const GRACE_HOURS     = 48;
     const VALIDATION_URL  = 'https://kirbycode.com/api/license/validate';
     const LICENSE_OPT     = 'kirbycode.media-hub.license';
@@ -55,7 +57,7 @@ class LicenseManager
                 'ignore_errors' => true,
             ]]);
             $body = @file_get_contents(self::VALIDATION_URL, false, $ctx);
-            if ($body === false) return self::failOpen();
+            if ($body === false) return self::serverDown();
 
             $data  = json_decode($body, true);
             $valid = isset($data['valid']) && $data['valid'] === true;
@@ -70,8 +72,21 @@ class LicenseManager
             self::clearGraceFile();
             return false;
         } catch (\Throwable $e) {
-            return self::failOpen();
+            return self::serverDown();
         }
+    }
+
+    /**
+     * The license server could not be reached. Remember the grace-period
+     * outcome briefly, so an outage costs one timeout per 15 minutes instead
+     * of one on every Pro check, Panel view and upload. The grace file itself
+     * is left alone: it is only written after a successful validation.
+     */
+    private static function serverDown(): bool
+    {
+        $isPro = self::failOpen();
+        self::writeCache($isPro, self::CACHE_TTL_DOWN);
+        return $isPro;
     }
 
     private static function failOpen(): bool
@@ -141,7 +156,7 @@ class LicenseManager
 
     private static function graceFilePath(): string
     {
-        return App::instance()->root('cache') . '/' . self::CACHE_DRIVER . '/.grace';
+        return App::instance()->root('cache') . '/' . self::GRACE_DIR . '/.grace';
     }
 
     private static function readGraceFile(): ?int

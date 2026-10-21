@@ -16,9 +16,11 @@ App::plugin(
     'kirbycode/media-hub',
     [
 
-    // ── License cache driver ────────────────────────────────────────────────
-    'cache' => [
-        'kirbycode-media-hub-license' => true,
+    // ── License + update-check cache ────────────────────────────────────────
+    // Kirby enables plugin caches through options: this makes
+    // $kirby->cache('kirbycode.media-hub.license') a real file cache.
+    'options' => [
+        'cache.license' => true,
     ],
 
     // ── Panel area ──────────────────────────────────────────────────────────
