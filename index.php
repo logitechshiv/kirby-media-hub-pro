@@ -6,6 +6,7 @@ if (!class_exists(\Kirbycode\MediaHub\Licensing\LicenseManager::class)) {
     require_once __DIR__ . '/src/Setup/MediaHubSetup.php';
     require_once __DIR__ . '/src/Optimization/MediaOptimizer.php';
     require_once __DIR__ . '/src/Files/FileReplacer.php';
+    require_once __DIR__ . '/src/Focus/FocusPoint.php';
     require_once __DIR__ . '/src/Licensing/LicenseManager.php';
     require_once __DIR__ . '/src/Licensing/UpdateChecker.php';
     require_once __DIR__ . '/src/Api/Helpers.php';
@@ -78,6 +79,7 @@ App::plugin(
                                     'isPro'           => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
                                     'isAdmin'         => $kirby->user() ? $kirby->user()->isAdmin() : false,
                                     'canDelete'       => \Kirbycode\MediaHub\Api\Helpers::canDeleteFiles(),
+                                    'canRenameFolders' => \Kirbycode\MediaHub\Api\Helpers::canRenameFolders(),
                                     'updateAvailable' => ($updateLatest = \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion()) !== null,
                                     'latestVersion'   => $updateLatest ?? '',
                                 ],
@@ -155,6 +157,7 @@ App::plugin(
                                     'isPro'           => \Kirbycode\MediaHub\Licensing\LicenseManager::isPro(),
                                     'isAdmin'         => $kirby->user() ? $kirby->user()->isAdmin() : false,
                                     'canDelete'       => \Kirbycode\MediaHub\Api\Helpers::canDeleteFiles(),
+                                    'canRenameFolders' => \Kirbycode\MediaHub\Api\Helpers::canRenameFolders(),
                                     'updateAvailable' => ($updateLatest = \Kirbycode\MediaHub\Licensing\UpdateChecker::latestVersion()) !== null,
                                     'latestVersion'   => $updateLatest ?? '',
                                 ],
@@ -177,6 +180,25 @@ App::plugin(
         'mediahubpicker' => require __DIR__ . '/src/Fields/mediahubpicker.php',
     ],
 
+    // ── Focus point helpers for templates ───────────────────────────────────
+    // Read Kirby's native `focus` field, so they work for any image file —
+    // set in the Media Hub or in Kirby's own file view.
+    'fileMethods' => [
+        // "62.5% 30.1%" or null when no (valid) focus point is set
+        'focusPosition' => function (): ?string {
+            return \Kirbycode\MediaHub\Focus\FocusPoint::position($this);
+        },
+        // "object-position: 62.5% 30.1%" for object-fit: cover images, or ''
+        'focusStyle' => function (): string {
+            return \Kirbycode\MediaHub\Focus\FocusPoint::style($this);
+        },
+    ],
+
+    // ── Snippets ────────────────────────────────────────────────────────────
+    'snippets' => [
+        'media-hub/image' => __DIR__ . '/snippets/image.php',
+    ],
+
     // ── Blueprint registration ──────────────────────────────────────────────
     'blueprints' => [
         'pages/media-hub'        => __DIR__ . '/blueprints/pages/media-hub.yml',
@@ -197,6 +219,16 @@ App::plugin(
     'hooks' => [
         'system.loadPlugins:after' => function () {
             \Kirbycode\MediaHub\Setup\MediaHubSetup::ensureStructure();
+        },
+
+        // Focus points on the frontend: adds object-position to every <img>
+        // of an image with a focus point, whichever template wrote it.
+        // Free and Pro; 'kirbycode.media-hub.focus-frontend' => false turns it off.
+        'page.render:after' => function (string $contentType, string $html) {
+            if ($contentType !== 'html' || !\Kirbycode\MediaHub\Focus\FocusPoint::frontendEnabled()) {
+                return $html;
+            }
+            return \Kirbycode\MediaHub\Focus\FocusPoint::apply($html);
         },
 
         // Capture the uploading user whenever a file is created inside media-hub

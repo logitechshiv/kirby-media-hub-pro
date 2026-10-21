@@ -227,6 +227,20 @@ $routes = [
                 $content['aigenerated'] = filter_var($body['aigenerated'], FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false';
             }
 
+            // Same "X% Y%" format as Kirby's own focus field, so crop() uses it
+            if (array_key_exists('focus', $body)) {
+                $focus = $body['focus'];
+                if ($focus === null || (is_string($focus) && trim($focus) === '')) {
+                    $content['focus'] = null;
+                } elseif (is_string($focus) && preg_match('/^(\d{1,3}(?:\.\d+)?)% (\d{1,3}(?:\.\d+)?)%$/', trim($focus), $m)) {
+                    $x = round(min(100, max(0, (float) $m[1])), 1);
+                    $y = round(min(100, max(0, (float) $m[2])), 1);
+                    $content['focus'] = $x . '% ' . $y . '%';
+                } else {
+                    return \Kirby\Http\Response::json(['status' => 'error', 'message' => 'Invalid focus point'], 400);
+                }
+            }
+
             try {
                 // Runs as the current user so Kirby's own file rules apply
                 $file->update($content);
@@ -552,6 +566,85 @@ $routes = [
         },
     ],
 
+    // ── 8b. Rename a folder (title + slug; file UUIDs stay intact) ──────────
+    [
+        'pattern' => 'media-hub/folders/(:any)',
+        'method'  => 'PATCH',
+        'auth'    => true,
+        'action'  => function (string $encodedPath) {
+            if ($guard = Helpers::requirePro()) return $guard;
+
+            $kirby = App::instance();
+            $slug  = $kirby->option('kirbycode.media-hub.root-slug', 'media-hub');
+            $path  = str_replace('+', '/', rawurldecode($encodedPath));
+            $title = trim((string) $kirby->request()->get('title', ''));
+
+            if ($path === '' || !Helpers::validatePath($path, $slug)) {
+                return ['status' => 'error', 'message' => 'Invalid folder path'];
+            }
+
+            $folder = $kirby->page($slug . '/' . $path);
+
+            if (!$folder || $folder->intendedTemplate()->name() !== 'media-hub-folder') {
+                return ['status' => 'error', 'message' => 'Folder not found'];
+            }
+
+            if ($title === '') {
+                return ['status' => 'error', 'message' => 'Folder name is required'];
+            }
+
+            // Same slug rules as creating a folder
+            $newSlug = Str::slug($title);
+
+            if ($newSlug === '') {
+                return ['status' => 'error', 'message' => 'Invalid folder name'];
+            }
+
+            if (!Helpers::canRenameFolder($folder)) {
+                return Helpers::forbidden('You are not allowed to rename this folder');
+            }
+
+            $parent  = $folder->parent();
+            $sibling = $parent->findPageOrDraft($newSlug);
+            if ($sibling && !$sibling->is($folder)) {
+                return ['status' => 'error', 'message' => 'A folder named "' . $newSlug . '" already exists here'];
+            }
+
+            try {
+                // Runs as the current user, so Kirby re-checks its own rules.
+                // changeSlug() moves the directory and rebuilds the UUID cache
+                // for every file inside, so file:// references keep resolving.
+                $renamed = $folder;
+                if ($renamed->title()->value() !== $title) {
+                    $renamed = $renamed->changeTitle($title);
+                }
+                if ($renamed->slug() !== $newSlug) {
+                    $renamed = $renamed->changeSlug($newSlug);
+                }
+            } catch (\Kirby\Exception\DuplicateException $e) {
+                return ['status' => 'error', 'message' => 'A folder named "' . $newSlug . '" already exists here'];
+            } catch (\Kirby\Exception\PermissionException $e) {
+                return Helpers::forbidden('You are not allowed to rename this folder');
+            } catch (\Throwable $e) {
+                error_log('[MediaHub] folder rename failed for ' . $path . ': ' . $e->getMessage());
+                return ['status' => 'error', 'message' => 'Operation failed.'];
+            }
+
+            $parentPath = $parent->id() === $slug ? '' : substr($parent->id(), strlen($slug) + 1);
+            $newPath    = ($parentPath !== '' ? $parentPath . '/' : '') . $renamed->slug();
+
+            return [
+                'status' => 'ok',
+                'data'   => [
+                    'oldPath' => $path,
+                    'path'    => $newPath,
+                    'slug'    => $renamed->slug(),
+                    'title'   => $renamed->title()->value(),
+                ],
+            ];
+        },
+    ],
+
     // ── 9. Usage tracking — all pages referencing a file UUID ──────────────
     [
         'pattern' => 'media-hub/usage/(:any)',
@@ -825,6 +918,7 @@ $routes = [
                     'type'     => $file->type(),
                     'title'    => (string) $file->content()->get('title')->or($file->filename())->value(),
                     'alt'      => (string) $file->content()->get('alt')->value(),
+                    'focus'    => (string) $file->content()->get('focus')->value(),
                 ];
             }
 

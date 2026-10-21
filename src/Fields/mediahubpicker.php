@@ -83,6 +83,7 @@ return [
                     'type'     => $file->type(),
                     'title'    => (string) $file->content()->get('title')->or($file->filename())->value(),
                     'alt'      => (string) $file->content()->get('alt')->value(),
+                    'focus'    => (string) $file->content()->get('focus')->value(),
                 ];
             }
 

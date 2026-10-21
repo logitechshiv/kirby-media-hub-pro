@@ -59,6 +59,7 @@ window.panel.plugin('kirbycode/media-hub', {
         isPro:           { type: Boolean, default: false },
         isAdmin:         { type: Boolean, default: false },
         canDelete:       { type: Boolean, default: false },
+        canRenameFolders: { type: Boolean, default: false },
         updateAvailable: { type: Boolean, default: false },
         latestVersion:   { type: String,  default: '' },
       },
@@ -85,6 +86,9 @@ window.panel.plugin('kirbycode/media-hub', {
           showSearch:       false,
           showNewFolder:    false,
           newFolderName:    '',
+          renamingFolder:   null,   // path of the folder whose name is being edited
+          renameFolderName: '',
+          renamingBusy:     false,
           activeFile:       null,
           searchTimer:      null,
           statsRefreshKey:  0,
@@ -358,6 +362,62 @@ window.panel.plugin('kirbycode/media-hub', {
           }
           this.newFolderName = '';
           this.showNewFolder = false;
+        },
+
+        startRenameFolder(folder) {
+          this.renamingFolder   = folder.path;
+          this.renameFolderName = folder.title;
+          this.$nextTick(() => {
+            const input = this.$el.querySelector('.k-media-hub-folder-rename-input');
+            if (input) { input.focus(); input.select(); }
+          });
+        },
+
+        cancelRenameFolder() {
+          this.renamingFolder   = null;
+          this.renameFolderName = '';
+        },
+
+        // Renames title + slug. The slug changes the folder's path and every
+        // file id inside it (UUIDs stay), so paths in view state are remapped.
+        async renameFolder(folder) {
+          const title = this.renameFolderName.trim();
+          if (this.renamingBusy) return;
+          if (!title || title === folder.title) {
+            this.cancelRenameFolder();
+            return;
+          }
+          this.renamingBusy = true;
+          const encodedPath = encodeURIComponent(folder.path).replace(/%2F/g, '+');
+          try {
+            const res = await this.$panel.api.patch('media-hub/folders/' + encodedPath, { title });
+            if (!res || res.status !== 'ok') {
+              this.$panel.notification.error((res && res.message) || 'Could not rename folder');
+              return;
+            }
+            const { oldPath, path } = res.data;
+            const remap = p => (p === oldPath ? path : (p && p.startsWith(oldPath + '/') ? path + p.slice(oldPath.length) : p));
+
+            this.expandedFolders = this.expandedFolders.map(remap);
+            this.cancelRenameFolder();
+            await this.loadFolders();
+
+            const active = remap(this.activeFolderPath);
+            if (active !== this.activeFolderPath) {
+              this.activeFolderPath = active;
+              this.syncFolderUrl(active);
+            }
+            // File ids contain the folder path, so any loaded list is stale
+            if (path !== oldPath) {
+              this.activeFile = null;
+              this.loadFiles();
+            }
+            this.$panel.notification.success('Folder renamed');
+          } catch (e) {
+            this.$panel.notification.error('Could not rename folder: ' + (e.message || e));
+          } finally {
+            this.renamingBusy = false;
+          }
         },
 
         async deleteFolder(folder) {
@@ -787,14 +847,33 @@ window.panel.plugin('kirbycode/media-hub', {
                     </button>
                     <span v-else class="k-media-hub-folder-expand-space"></span>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    <span class="k-media-hub-folder-name">{{ folder.title }}</span>
-                    <span class="k-media-hub-folder-count">{{ folder.fileCount }}</span>
-                    <button
-                      v-if="isAdmin"
-                      class="k-media-hub-folder-delete"
-                      @click.stop="deleteFolder(folder)"
-                      title="Delete folder"
-                    >×</button>
+                    <input
+                      v-if="renamingFolder === folder.path"
+                      v-model="renameFolderName"
+                      type="text"
+                      class="k-media-hub-folder-rename-input"
+                      :disabled="renamingBusy"
+                      @click.stop
+                      @keydown.enter.prevent="renameFolder(folder)"
+                      @keydown.esc.prevent="cancelRenameFolder"
+                      @blur="cancelRenameFolder"
+                    />
+                    <template v-else>
+                      <span class="k-media-hub-folder-name">{{ folder.title }}</span>
+                      <span class="k-media-hub-folder-count">{{ folder.fileCount }}</span>
+                      <button
+                        v-if="isPro && canRenameFolders"
+                        class="k-media-hub-folder-rename"
+                        @click.stop="startRenameFolder(folder)"
+                        title="Rename folder"
+                      ><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                      <button
+                        v-if="isAdmin"
+                        class="k-media-hub-folder-delete"
+                        @click.stop="deleteFolder(folder)"
+                        title="Delete folder"
+                      >×</button>
+                    </template>
                   </div>
                   <ul
                     v-if="folder.children && folder.children.length && expandedFolders.includes(folder.path)"
@@ -807,14 +886,33 @@ window.panel.plugin('kirbycode/media-hub', {
                       @click="selectFolder(sub.path)"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                      <span class="k-media-hub-folder-name">{{ sub.title }}</span>
-                      <span class="k-media-hub-folder-count">{{ sub.fileCount }}</span>
-                      <button
-                        v-if="isAdmin"
-                        class="k-media-hub-folder-delete"
-                        @click.stop="deleteFolder(sub)"
-                        title="Delete folder"
-                      >×</button>
+                      <input
+                        v-if="renamingFolder === sub.path"
+                        v-model="renameFolderName"
+                        type="text"
+                        class="k-media-hub-folder-rename-input"
+                        :disabled="renamingBusy"
+                        @click.stop
+                        @keydown.enter.prevent="renameFolder(sub)"
+                        @keydown.esc.prevent="cancelRenameFolder"
+                        @blur="cancelRenameFolder"
+                      />
+                      <template v-else>
+                        <span class="k-media-hub-folder-name">{{ sub.title }}</span>
+                        <span class="k-media-hub-folder-count">{{ sub.fileCount }}</span>
+                        <button
+                          v-if="isPro && canRenameFolders"
+                          class="k-media-hub-folder-rename"
+                          @click.stop="startRenameFolder(sub)"
+                          title="Rename folder"
+                        ><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                        <button
+                          v-if="isAdmin"
+                          class="k-media-hub-folder-delete"
+                          @click.stop="deleteFolder(sub)"
+                          title="Delete folder"
+                        >×</button>
+                      </template>
                     </li>
                   </ul>
                 </li>
@@ -1228,7 +1326,7 @@ window.panel.plugin('kirbycode/media-hub', {
             <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="4"/></svg>
           </div>
           <div class="k-media-hub-file-preview">
-            <img v-if="file.thumb" :src="file.thumb" :alt="file.alt || file.filename" loading="lazy" />
+            <img v-if="file.thumb" :src="file.thumb" :alt="file.alt || file.filename" :style="{ objectPosition: file.focus || null }" loading="lazy" />
             <span v-else class="k-media-hub-file-icon" v-html="iconFor(file.type)"></span>
             <span v-if="file.aigenerated" class="k-media-hub-ai-badge" title="AI-generated">AI</span>
           </div>
@@ -1276,6 +1374,125 @@ window.panel.plugin('kirbycode/media-hub', {
     },
 
     // ── File detail side panel ─────────────────────────────────────────────
+    // ── Focus point (shared by the Media Hub detail panel and the picker modal) ──
+    // Writes Kirby's own `focus` field ("X% Y%"), so $file->crop() and the
+    // native file view use the same point.
+    'k-media-hub-focus': {
+      props: {
+        file:     { type: Object,  required: true },
+        src:      { type: String,  required: true },
+        readonly: { type: Boolean, default: false },
+      },
+      emits: ['saved'],
+
+      data() {
+        // Focus point as it was when this file was opened — what Reset restores
+        return { saving: false, original: this.file.focus || '' };
+      },
+
+      watch: {
+        // A different file shown in the same panel: that file's focus becomes
+        // the new original. Keyed on the UUID, so a rename keeps it.
+        fileKey() {
+          this.original = this.file.focus || '';
+        },
+      },
+
+      computed: {
+        encodedId() {
+          return encodeURIComponent(this.file.id).replace(/%2F/g, '+');
+        },
+        fileKey() {
+          return this.file.uuid || this.file.id;
+        },
+        changed() {
+          return (this.file.focus || '') !== this.original;
+        },
+        // Kirby can't crop SVGs, so a focus point would do nothing
+        canFocus() {
+          return this.file.extension !== 'svg';
+        },
+        point() {
+          const m = /^([\d.]+)% ([\d.]+)%$/.exec((this.file.focus || '').trim());
+          return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : null;
+        },
+      },
+
+      methods: {
+        onClick(e) {
+          if (this.readonly || !this.canFocus || this.saving) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+          const clamp = v => Math.min(100, Math.max(0, Math.round(v * 10) / 10));
+          const x = clamp((e.clientX - rect.left) / rect.width  * 100);
+          const y = clamp((e.clientY - rect.top)  / rect.height * 100);
+          this.save(x + '% ' + y + '%');
+        },
+
+        reset() {
+          this.save(this.original, this.original ? 'Focus point reset' : 'Focus point removed');
+        },
+
+        async save(focus, message = null) {
+          this.saving = true;
+          try {
+            const res = await this.$panel.api.patch(
+              'media-hub/files/' + this.encodedId + '/update',
+              { focus }
+            );
+            if (res && res.status === 'error') {
+              this.$panel.notification.error(res.message || 'Could not save focus point');
+              return;
+            }
+            this.$panel.notification.success(message || (focus ? 'Focus point set' : 'Focus point removed'));
+            this.$emit('saved', { ...this.file, focus });
+          } catch (e) {
+            this.$panel.notification.error('Could not save focus point: ' + (e.message || e));
+          } finally {
+            this.saving = false;
+          }
+        },
+      },
+
+      template: `
+        <div class="k-media-hub-focus">
+          <div
+            :class="['k-media-hub-focus-frame', { 'is-editable': canFocus && !readonly, 'is-saving': saving }]"
+            @click="onClick"
+          >
+            <img :src="src" :alt="file.alt" draggable="false" />
+            <span
+              v-if="canFocus && point"
+              class="k-media-hub-focus-marker"
+              :style="{ left: point.x + '%', top: point.y + '%' }"
+            ></span>
+          </div>
+          <div v-if="canFocus" class="k-media-hub-focus-bar">
+            <span v-if="point">Focus: {{ file.focus }}</span>
+            <span v-else-if="!readonly">Click the image to set the focus point</span>
+            <span v-else>No focus point</span>
+            <span v-if="!readonly && (changed || point)" class="k-media-hub-focus-actions">
+              <button
+                v-if="changed"
+                type="button"
+                class="k-media-hub-focus-reset"
+                :disabled="saving"
+                :title="original ? 'Back to ' + original : 'Back to no focus point'"
+                @click.stop="reset"
+              >Reset</button>
+              <button
+                v-if="point"
+                type="button"
+                class="k-media-hub-focus-remove"
+                :disabled="saving"
+                @click.stop="save('')"
+              >Remove</button>
+            </span>
+          </div>
+        </div>
+      `,
+    },
+
     // ── Metadata form (shared by the Media Hub detail panel and the picker modal) ──
     'k-media-hub-meta-form': {
       props: {
@@ -1724,7 +1941,13 @@ window.panel.plugin('kirbycode/media-hub', {
           </form>
 
           <div class="k-media-hub-detail-preview">
-            <img v-if="file.type === 'image' && file.url" :src="file.url" :alt="file.alt" />
+            <k-media-hub-focus
+              v-if="file.type === 'image' && file.url"
+              :file="file"
+              :src="file.url"
+              :readonly="file.canUpdate === false"
+              @saved="$emit('updated', $event)"
+            />
             <div v-else class="k-media-hub-detail-icon">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </div>
@@ -2407,7 +2630,7 @@ window.panel.plugin('kirbycode/media-hub', {
         onSaved(updated) {
           this.activeFile = { ...this.activeFile, ...updated };
           const ref   = 'file://' + updated.uuid;
-          const patch = { title: updated.title || updated.filename, alt: updated.alt };
+          const patch = { title: updated.title || updated.filename, alt: updated.alt, focus: updated.focus || '' };
           for (const list of [this.pickerItems, this.pending, this.selected]) {
             const i = list.findIndex(s => s.uuid === ref);
             if (i > -1) list.splice(i, 1, { ...list[i], ...patch });
@@ -2422,7 +2645,7 @@ window.panel.plugin('kirbycode/media-hub', {
           <!-- Selected items list -->
           <div v-if="selected.length" class="k-mediahubpicker-selected">
             <div v-for="(item, idx) in selected" :key="item.uuid" class="k-mediahubpicker-item-selected">
-              <img v-if="item.type === 'image' && item.thumb" :src="item.thumb" :alt="item.alt || item.title" />
+              <img v-if="item.type === 'image' && item.thumb" :src="item.thumb" :alt="item.alt || item.title" :style="{ objectPosition: item.focus || null }" />
               <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               <span>{{ item.title || item.filename }}</span>
               <span v-if="item.type === 'image' && !item.alt" class="k-mediahubpicker-noalt" title="Missing alt text">ALT</span>
@@ -2580,7 +2803,7 @@ window.panel.plugin('kirbycode/media-hub', {
                       @click="onItemClick(item)"
                     >
                       <div class="k-mediahubpicker-pick-preview">
-                        <img v-if="item.thumb" :src="item.thumb" :alt="item.alt || item.title" loading="lazy" />
+                        <img v-if="item.thumb" :src="item.thumb" :alt="item.alt || item.title" :style="{ objectPosition: item.focus || null }" loading="lazy" />
                         <svg v-else width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                       </div>
                       <span class="k-mediahubpicker-pick-name">{{ item.title || item.filename }}</span>
@@ -2608,7 +2831,13 @@ window.panel.plugin('kirbycode/media-hub', {
                   <template v-else>
                     <div class="k-mediahubpicker-details-heading">Attachment details</div>
                     <div class="k-mediahubpicker-details-preview">
-                      <img v-if="activeFile.type === 'image' && (activeFile.thumb || activeFile.url)" :src="activeFile.thumb || activeFile.url" :alt="activeFile.alt" />
+                      <k-media-hub-focus
+                        v-if="activeFile.type === 'image' && (activeFile.thumb || activeFile.url)"
+                        :file="activeFile"
+                        :src="activeFile.thumb || activeFile.url"
+                        :readonly="activeFile.canUpdate === false"
+                        @saved="onSaved"
+                      />
                       <svg v-else width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     </div>
                     <div class="k-mediahubpicker-details-file">

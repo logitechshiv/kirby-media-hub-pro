@@ -271,6 +271,44 @@
   display: inline-flex;
 }
 
+/* Rename: pencil shown on hover like delete, inline input in place of the name */
+.k-media-hub-folder-rename {
+  display: none;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-dimmed, #bbb);
+  padding: 0 0.1rem;
+  border-radius: 3px;
+  transition: color 0.1s;
+}
+
+.k-media-hub-folder-rename:hover {
+  color: var(--color-focus, #2563eb);
+}
+
+.k-media-hub-folder-list li:hover .k-media-hub-folder-rename,
+.k-media-hub-folder-row:hover .k-media-hub-folder-rename {
+  display: inline-flex;
+}
+
+.k-media-hub-folder-rename-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--color-focus, #2563eb);
+  border-radius: 3px;
+  background: var(--color-white, #fff);
+  color: var(--color-text, #333);
+  outline: none;
+}
+
+.k-media-hub-folder-rename-input:disabled {
+  opacity: 0.6;
+}
+
 /* ── Subfolder support ────────────────────────────────────────────────── */
 
 /* Override li base styles for folder-entry wrappers */
@@ -945,6 +983,13 @@ li.k-media-hub-folder-entry:hover {
   box-shadow: -4px 0 20px rgba(0,0,0,0.06);
 }
 
+/* The panel scrolls instead of squeezing its sections: without this, a tall
+   metadata form shrank the preview (overflow: hidden) to its min-height,
+   cutting off the image and the focus bar with Reset/Remove. */
+.k-media-hub-detail > * {
+  flex-shrink: 0;
+}
+
 .k-media-hub-detail-header {
   display: flex;
   align-items: center;
@@ -1021,13 +1066,91 @@ li.k-media-hub-folder-entry:hover {
   align-items: center;
   justify-content: center;
   min-height: 130px;
-  max-height: 230px;
 }
 
 .k-media-hub-detail-preview img {
   max-width: 100%;
   max-height: 230px;
   object-fit: contain;
+}
+
+/* ── Focus point ── */
+.k-media-hub-focus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.k-media-hub-focus-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.k-media-hub-focus-frame img {
+  display: block;
+  user-select: none;
+}
+
+.k-media-hub-focus-frame.is-editable {
+  cursor: crosshair;
+}
+
+.k-media-hub-focus-frame.is-saving {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.k-media-hub-focus-marker {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: color-mix(in srgb, var(--color-focus, #2563eb) 45%, transparent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.k-media-hub-focus-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--color-text-dimmed, #777);
+}
+
+.k-media-hub-focus-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.k-media-hub-focus-reset,
+.k-media-hub-focus-remove {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-negative, #e53e3e);
+  cursor: pointer;
+}
+
+.k-media-hub-focus-reset {
+  color: var(--color-text, #333);
+}
+
+.k-media-hub-focus-reset:disabled,
+.k-media-hub-focus-remove:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .k-media-hub-detail-icon {

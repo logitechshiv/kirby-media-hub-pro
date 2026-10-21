@@ -11,6 +11,43 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.8.0] — 2026-10-21
+
+### Added
+
+- **Rename folder** — a pencil next to each folder and subfolder in the sidebar renames it inline (**Enter** saves, **Esc** cancels). Title and slug both change, with the slug derived from the name the same way as when creating a folder; subfolders and files move along and keep their UUIDs, so `file://` references keep resolving. The open folder, its expanded state and the address bar follow the new path. Pro only.
+  - New route: `PATCH media-hub/folders/(:any)` with `{ "title": "…" }`; returns `oldPath`, `path`, `slug` and `title`. A name whose slug is already taken by a sibling is refused.
+  - Permissions: Kirby's `changeTitle` and `changeSlug` on the folder, narrowed by `kirbycode.media-hub.rename-roles`, which now covers folders as well as files. Runs as the current user, so Kirby re-checks its own rules.
+  - New Panel view prop `canRenameFolders` and helpers `Helpers::canRenameFolder()` / `canRenameFolders()`.
+
+- **Reset focus point** — after changing an image's focus point, a **Reset** action next to **Remove** restores the point it had when the image was opened (or no point, if it had none). Available in the Media Hub detail panel and the picker's details pane. Opening another image starts over from that image's point; renaming keeps it.
+- **Automatic focus points on the frontend** (Free and Pro) — after a page is rendered, every `<img>` of an image with a focus point gets `object-position: X% Y%`, whichever template, snippet or block wrote it. Covers originals, thumbs, `srcset` and `data-src`; never overrides an inline `object-position`; keeps other inline styles. Runs before the page cache. Turn off with the new option `kirbycode.media-hub.focus-frontend` (default `true`). The same feature is available for sites without the Media Hub as the [Media Focus Point](https://github.com/logitechshiv/media-focus-point) add-on, which steps aside when both are installed.
+
+### Fixed
+
+- Media Hub detail panel: sections no longer shrink to fit the screen height. With a long metadata form, the preview was squeezed to its minimum height, cutting off the bottom of the image and hiding the focus bar (focus value, **Reset**, **Remove**). The panel now scrolls instead.
+
+### Changed
+
+- `$file->focusPosition()` and `$file->focusStyle()` accept every focus format Kirby does: besides `X% Y%`, keywords such as `top left` and the former Focus plugin's JSON. `focusStyle()` returns `''` for non-image files.
+- README: new **Focus Points** (Panel usage, Reset/Remove, frontend), **Folders** (create, subfolders, rename, delete) and **Upgrading → To 1.8** sections.
+
+---
+
+## [1.7.0] — 2026-10-20
+
+### Added
+
+- **Focus point** — click an image in the Media Hub detail panel or the picker's details pane to set its focus point, with a marker and a **Remove** action. It is stored in Kirby's native `focus` field (`X% Y%`), so `$file->crop()` and the Panel's own file view use the same point. Grid and picker thumbnails follow it via `object-position`. Not offered for SVGs. Requires Kirby's `update` permission on the file.
+  - `PATCH media-hub/files/(:any)/update` accepts `focus`: `"X% Y%"` (clamped to 0–100) or an empty string to clear; anything else is rejected with 400.
+  - `focus` is included in file, picker and picker-field payloads.
+- **Frontend focus helpers** — file methods `$file->focusPosition()` (`"X% Y%"` or `null`) and `$file->focusStyle()` (`"object-position: X% Y%"` or `''`) for `object-fit: cover` images. They read Kirby's native field, so they also work for files outside the Media Hub.
+- **`media-hub/image` snippet** — responsive `<img>` (srcset, sizes, alt, lazy loading) with the focus point applied; `crop: [w, h]` switches to server-side 1x/2x crops around the focus point.
+
+### Changed
+
+- The detail panel preview no longer caps its own height (the image still does), so the focus bar below the image is not clipped.
+
 ## [1.6.0] — 2026-10-13
 
 ### Added

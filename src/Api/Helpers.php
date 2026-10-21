@@ -98,6 +98,39 @@ class Helpers
     }
 
     /**
+     * Whether the current user may rename the Media Hub folder $folder: Kirby's
+     * `changeTitle` and `changeSlug` permissions, narrowed by `rename-roles`
+     * (the same option as for files).
+     */
+    public static function canRenameFolder(Page $folder): bool
+    {
+        if (!self::can($folder, 'changeTitle') || !self::can($folder, 'changeSlug')) {
+            return false;
+        }
+
+        return self::roleAllowed('rename-roles');
+    }
+
+    /**
+     * Role-level counterpart of canRenameFolder(), for the Panel view props.
+     * Per-folder blueprint rules are still enforced on every actual rename.
+     */
+    public static function canRenameFolders(): bool
+    {
+        $user = App::instance()->user();
+
+        if (
+            $user === null ||
+            $user->role()->permissions()->for('pages', 'changeTitle') !== true ||
+            $user->role()->permissions()->for('pages', 'changeSlug') !== true
+        ) {
+            return false;
+        }
+
+        return self::roleAllowed('rename-roles');
+    }
+
+    /**
      * Checks the current user's role against `kirbycode.media-hub.{$key}`,
      * e.g. 'delete-roles'. No option set → every role that Kirby already
      * permits may perform the action.
@@ -300,6 +333,7 @@ class Helpers
             'tags'         => $tagsRaw ? array_values(array_filter(array_map('trim', explode(',', $tagsRaw)))) : [],
             'uploadedby'   => (string) $file->content()->get('uploadedby')->value(),
             'uploaddate'   => (string) $file->content()->get('uploaddate')->value(),
+            'focus'        => (string) $file->content()->get('focus')->value(),
         ];
 
         if ($detailed) {
